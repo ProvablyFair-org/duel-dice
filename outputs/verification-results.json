@@ -1,0 +1,137 @@
+{
+  "generatedAt": "2026-06-10T12:28:34.188Z",
+  "totalBets": 6700,
+  "totalSeeds": 138,
+  "steps": [
+    {
+      "step": 1,
+      "name": "Seed Hash Integrity",
+      "status": "PASS",
+      "detail": "134 revealed seeds verified. 3 phase-boundary skips."
+    },
+    {
+      "step": 2,
+      "name": "Next-Seed Promotion (Commitment Linkage)",
+      "status": "PASS",
+      "detail": "138/138 rotation transitions verified — previousNextHash === newActiveHash recomputed for each rotation; next-seed pre-commitment chain intact"
+    },
+    {
+      "step": 3,
+      "name": "Hash Consistency Within Epoch",
+      "status": "PASS",
+      "detail": "All 134 epochs: server_seed_hashed identical across all bets within each epoch"
+    },
+    {
+      "step": 4,
+      "name": "Nonce Audit",
+      "status": "PASS",
+      "detail": "134 epochs. 4 capture-retry: 4 reconstructed from revealed seed (no captured server response available for comparison), 0 unverifiable."
+    },
+    {
+      "step": 5,
+      "name": "Result Recomputation (RNG determinism)",
+      "status": "PASS",
+      "detail": "6700/6700 verified, 0 mismatches, 0 skipped"
+    },
+    {
+      "step": 6,
+      "name": "Client Seed Influence",
+      "status": "PASS",
+      "detail": "670/670 bets: wrong clientSeed → different result"
+    },
+    {
+      "step": 7,
+      "name": "Payout Math",
+      "status": "PASS",
+      "detail": "6700 bets checked, 0 errors (tolerance 1e-8)"
+    },
+    {
+      "step": 8,
+      "name": "Win Condition (result > target)",
+      "status": "PASS",
+      "detail": "6700 bets verified: is_win = (result > target) for all bets; 0 errors"
+    },
+    {
+      "step": 9,
+      "name": "Multiplier Formula (0.999 / win_chance)",
+      "status": "PASS",
+      "detail": "6700 bets checked; formula: multiplier = 0.999 / ((10000 − target) / 10001); 0 mismatches"
+    },
+    {
+      "step": 10,
+      "name": "Win Chance Formula ((10000 − target) / 10001)",
+      "status": "PASS",
+      "detail": "6700 bets checked; formula confirmed exact to 14 decimal places; 0 mismatches"
+    },
+    {
+      "step": 11,
+      "name": "Phase Labels",
+      "status": "PASS",
+      "detail": "Phases present: A, B, C, D; last bet phase: D"
+    },
+    {
+      "step": 12,
+      "name": "Dataset Hash",
+      "status": "PASS",
+      "detail": "3550ffca07a6f7825f96cdd4e3d8c3cd57898b5b5238b9739753a754cff056d6"
+    },
+    {
+      "step": 13,
+      "name": "Sampling Uniformity (closed-form RTP precondition)",
+      "status": "PASS",
+      "detail": "MAX_FAIR = 4294959453 = 10001 × 429453 → result exactly uniform on {0..10000}; closed-form EV = 0.999 for all targets 2–9998 follows. Checks: MAX_FAIR % 10001 === 0 (true); independent bound === src/rng MAX_FAIR (true); RANGE === 10001 (true)."
+    },
+    {
+      "step": 14,
+      "name": "Epoch Size",
+      "status": "PASS",
+      "detail": "134 epochs; min=50, max=50 bets per epoch"
+    },
+    {
+      "step": 15,
+      "name": "Phase D — Client Seed Variation",
+      "status": "PASS",
+      "detail": "500 bets, 10 distinct client seeds, targets: 9700; recomputation: 500/500 match"
+    },
+    {
+      "step": 16,
+      "name": "Simulation Results — Pass 1 Integrity",
+      "status": "PASS",
+      "detail": "98,000,000 rounds × 98 targets; mean RTP=99.9221%; chi2: 0/98 uncorrected, 0/98 at Bonferroni α/98=0.000102; serial: 0/98 uncorrected, 0/98 at Bonferroni"
+    },
+    {
+      "step": 17,
+      "name": "Simulation Results — Pass 2 Cherry-Pick Test",
+      "status": "PASS",
+      "detail": "134 seeds × target=5000; Test A: 2/134 fails (expected ≤2); Test B: 9/134 early-window statistical flags (≤14 = 2×7 threshold); 9 isolated to early window, 0 also showed deviation in the late window — within expected false-positive range under the binomial null"
+    }
+  ],
+  "info": [
+    {
+      "label": "RTP Analysis",
+      "detail": "Empirical RTP: 83.9856% — Dice is high-variance; theoretical RTP 99.9000% proven analytically in simulation step."
+    },
+    {
+      "label": "Win Rate Chi-Squared (per-target groups)",
+      "detail": "2 target groups (≥10 bets) tested; fails at α=0.01: 0/2; min p=0.2585; Bonferroni α/2=0.005000"
+    },
+    {
+      "label": "Win Rate — Fixed-Target Phases (B/C/D)",
+      "detail": "Phase B(t=9800): 25/1000 wins, theor=1.9998%, p=0.2585 | Phase C(t=9700): 5/200 wins, theor=2.9997%, p=0.6787 | Phase D(t=9700): 15/500 wins, theor=2.9997%, p=0.9997"
+    },
+    {
+      "label": "Serial Independence (lag-1 autocorrelation)",
+      "detail": "r₁=0.022881, z=1.873 (|z|<3 → no serial correlation). Underpowered at live sample size — see simulation for definitive test."
+    },
+    {
+      "label": "Serial Independence (Wald-Wolfowitz runs test)",
+      "detail": "runs=3264, expected=3351.0, z=-2.126, p=0.0335. Underpowered at live sample size — see simulation for definitive test."
+    }
+  ],
+  "summary": {
+    "passed": 17,
+    "flags": 0,
+    "hardFail": 0,
+    "verdict": "PROVABLY FAIR — Full Pass"
+  }
+}

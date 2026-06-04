@@ -1,0 +1,8 @@
+node_modules/
+dist/
+outputs/*.json
+!outputs/.gitkeep
+!data/.gitkeep
+.DS_Store
+!outputs/rtp-convergence.html
+.browser-profile/
