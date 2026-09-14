@@ -16,6 +16,7 @@ import * as payouts     from './steps/payouts';
 import * as statistical from './steps/statistical';
 import * as dataset     from './steps/dataset';
 import * as simulation  from './steps/simulation';
+import * as artifacts   from './steps/artifacts';
 
 // ── Pre-flight: dataset hash ───────────────────────────────────────────────────
 
@@ -67,6 +68,7 @@ const results = [
   ...payouts.run(ctx),      // Steps  7–10
   ...dataset.run(ctx),      // Steps 11–15
   ...simulation.run(ctx),   // Steps 16–17
+  ...artifacts.run(ctx),    // Step 18
 ];
 
 // ── Run informational items (live-bet stats — underpowered, not scored) ──────

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-14T12:49:02.253Z",
+  "generatedAt": "2026-09-14T19:51:58.834Z",
   "totalBets": 6700,
   "totalSeeds": 138,
   "steps": [
@@ -104,6 +104,12 @@
       "name": "Simulation Results — Pass 2 Cherry-Pick Test",
       "status": "PASS",
       "detail": "134 seeds × target=5000; Test A: 2/134 fails (expected ≤2); Test B: 9/134 early-window statistical flags (≤14 = 2×7 threshold); 9 isolated to early window, 0 also showed deviation in the late window — within expected false-positive range under the binomial null"
+    },
+    {
+      "step": 18,
+      "name": "Artifact Integrity (pinned artifacts of record)",
+      "status": "PASS",
+      "detail": "2 artifact(s) checked against src/artifact-pins.ts; rtp-convergence.html matches its pin; simulation-results.json matches its pin"
     }
   ],
   "info": [
@@ -129,7 +135,7 @@
     }
   ],
   "summary": {
-    "passed": 17,
+    "passed": 18,
     "flags": 0,
     "hardFail": 0,
     "verdict": "PROVABLY FAIR — Full Pass"
