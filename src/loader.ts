@@ -6,6 +6,22 @@ import type { DiceDataset, DiceBet, SeedEntry } from './types';
 const DATASET_PATH  = path.join(__dirname, '../data/dice-master-6700bets.json');
 const EXPECTED_HASH = '3550ffca07a6f7825f96cdd4e3d8c3cd57898b5b5238b9739753a754cff056d6';
 
+// ── POPULATION OF RECORD ─────────────────────────────────────────────────────────
+// The capture plan, stated as CODE so a shrunken dataset cannot pass by agreeing with
+// itself. Without these, nothing in the repo says how many bets an honest run has:
+// deleting nonces 30–49 from every non-retry epoch and re-pinning EXPECTED_HASH leaves
+// a 4,100-bet dataset that the verifier scores 16/17 "Conditional Pass", exit 0.
+//
+// The hash pin alone cannot catch that — re-pinning is exactly what a forger does. The
+// counts have to be asserted from somewhere the dataset does not control, and a step
+// that finds them wrong must HARD FAIL, not flag.
+export const EXPECTED_BETS       = 6700;
+export const EXPECTED_SEEDS      = 138;   // 134 epochs + 4 terminal rotations with no bets
+export const EXPECTED_EPOCHS     = 134;
+export const EXPECTED_EPOCH_SIZE = 50;
+export const EXPECTED_PHASE_BETS: Readonly<Record<string, number>> =
+  Object.freeze({ A: 5000, B: 1000, C: 200, D: 500 });
+
 export function getDatasetPath(): string { return DATASET_PATH; }
 
 export function loadDataset(): DiceDataset {

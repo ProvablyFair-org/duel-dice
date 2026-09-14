@@ -4,19 +4,43 @@
 
 import type { StepResult } from './context';
 import { step, VerifyContext } from './context';
-import { checkDatasetHash } from '../../src/loader';
+import {
+  checkDatasetHash,
+  EXPECTED_BETS, EXPECTED_SEEDS, EXPECTED_EPOCHS, EXPECTED_EPOCH_SIZE, EXPECTED_PHASE_BETS,
+} from '../../src/loader';
 import { computeResult, RANGE, MAX_FAIR } from '../../src/rng';
 
 export function run(ctx: VerifyContext): StepResult[] {
   const { bets, phaseD } = ctx;
 
-  // ── Step 11: Phase labels ─────────────────────────────────────────────────────
+  // ── Step 11: Population & phase labels ────────────────────────────────────────
+  // Bound to CODE constants, never to the dataset's own header. The counts come from
+  // src/loader.ts; a dataset that disagrees with the capture plan fails here even when
+  // its hash pin has been updated to match it.
   const phases    = new Set(bets.map(b => b.phase));
   const hasAll    = ['A', 'B', 'C', 'D'].every(p => phases.has(p));
   const lastPhase = bets[bets.length - 1].phase;
-  const s11 = step(11, 'Phase Labels',
-    hasAll && lastPhase === 'D' ? 'PASS' : 'FLAG',
-    `Phases present: ${[...phases].sort().join(', ')}; last bet phase: ${lastPhase}`,
+
+  const phaseCounts: Record<string, number> = {};
+  for (const b of bets) phaseCounts[b.phase] = (phaseCounts[b.phase] ?? 0) + 1;
+  const phaseBad = Object.entries(EXPECTED_PHASE_BETS)
+    .filter(([p, n]) => (phaseCounts[p] ?? 0) !== n)
+    .map(([p, n]) => `${p}: ${phaseCounts[p] ?? 0} ≠ ${n}`);
+  const extraPhases = Object.keys(phaseCounts).filter(p => !(p in EXPECTED_PHASE_BETS));
+
+  const betsOk   = bets.length === EXPECTED_BETS;
+  const seedsOk  = ctx.seeds.length === EXPECTED_SEEDS;
+  const popOk    = betsOk && seedsOk && phaseBad.length === 0 && extraPhases.length === 0;
+
+  const s11 = step(11, 'Population & Phase Labels',
+    popOk && hasAll && lastPhase === 'D' ? 'PASS' : 'FAIL',
+    `${bets.length}/${EXPECTED_BETS} bets and ${ctx.seeds.length}/${EXPECTED_SEEDS} seed records against the capture plan in src/loader.ts (code constants, not the dataset header); ` +
+    `per phase ${Object.entries(EXPECTED_PHASE_BETS).map(([p, n]) => `${p}=${phaseCounts[p] ?? 0}/${n}`).join(' ')}; ` +
+    `phases present: ${[...phases].sort().join(', ')}; last bet phase: ${lastPhase}` +
+    (betsOk ? '' : `; BET COUNT MISMATCH`) +
+    (seedsOk ? '' : `; SEED COUNT MISMATCH`) +
+    (phaseBad.length ? `; PHASE MISMATCH ${phaseBad.join(', ')}` : '') +
+    (extraPhases.length ? `; UNDECLARED PHASE ${extraPhases.join(', ')}` : ''),
   );
 
   // ── Step 12: Dataset hash ─────────────────────────────────────────────────────
@@ -51,9 +75,17 @@ export function run(ctx: VerifyContext): StepResult[] {
   const sizes   = [...epochSizes.values()];
   const minSize = Math.min(...sizes);
   const maxSize = Math.max(...sizes);
-  const s14 = step(14, 'Epoch Size',
-    (minSize === 50 && maxSize === 50) ? 'PASS' : 'FLAG',
-    `${epochSizes.size} epochs; min=${minSize}, max=${maxSize} bets per epoch`,
+  // Epoch COUNT as well as epoch size: a uniform 50 across 82 epochs is still a shrunken
+  // capture, and size alone cannot see that. Both bound to code constants, and FAIL — the
+  // old FLAG let a 4,100-bet forgery exit 0.
+  const epochCountOk = epochSizes.size === EXPECTED_EPOCHS;
+  const epochSizeOk  = minSize === EXPECTED_EPOCH_SIZE && maxSize === EXPECTED_EPOCH_SIZE;
+  const s14 = step(14, 'Epoch Count & Size',
+    epochCountOk && epochSizeOk ? 'PASS' : 'FAIL',
+    `${epochSizes.size}/${EXPECTED_EPOCHS} epochs carrying bets; min=${minSize}, max=${maxSize} against EXPECTED_EPOCH_SIZE ${EXPECTED_EPOCH_SIZE}; ` +
+    `${epochSizes.size} × ${EXPECTED_EPOCH_SIZE} = ${epochSizes.size * EXPECTED_EPOCH_SIZE} bets` +
+    (epochCountOk ? '' : `; EPOCH COUNT MISMATCH`) +
+    (epochSizeOk ? '' : `; EPOCH SIZE MISMATCH`),
   );
 
   // ── Step 15: Phase D — client seed variation ──────────────────────────────────

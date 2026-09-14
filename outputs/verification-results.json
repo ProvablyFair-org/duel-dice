@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-06-10T12:28:34.188Z",
+  "generatedAt": "2026-09-14T12:49:02.253Z",
   "totalBets": 6700,
   "totalSeeds": 138,
   "steps": [
@@ -65,9 +65,9 @@
     },
     {
       "step": 11,
-      "name": "Phase Labels",
+      "name": "Population & Phase Labels",
       "status": "PASS",
-      "detail": "Phases present: A, B, C, D; last bet phase: D"
+      "detail": "6700/6700 bets and 138/138 seed records against the capture plan in src/loader.ts (code constants, not the dataset header); per phase A=5000/5000 B=1000/1000 C=200/200 D=500/500; phases present: A, B, C, D; last bet phase: D"
     },
     {
       "step": 12,
@@ -83,9 +83,9 @@
     },
     {
       "step": 14,
-      "name": "Epoch Size",
+      "name": "Epoch Count & Size",
       "status": "PASS",
-      "detail": "134 epochs; min=50, max=50 bets per epoch"
+      "detail": "134/134 epochs carrying bets; min=50, max=50 against EXPECTED_EPOCH_SIZE 50; 134 × 50 = 6700 bets"
     },
     {
       "step": 15,
