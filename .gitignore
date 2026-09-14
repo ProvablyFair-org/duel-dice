@@ -6,3 +6,6 @@ outputs/*.json
 .DS_Store
 !outputs/rtp-convergence.html
 .browser-profile/
+
+# run products — this verifier writes them fresh each run; the committed artifacts are pinned
+outputs/run/
