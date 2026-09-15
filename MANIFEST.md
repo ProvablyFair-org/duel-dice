@@ -43,11 +43,11 @@ The rejection-sampling step removes the modulo-bias the naive `chunk % RANGE` wo
 
 ## Verification
 
-- **Verification steps:** 17 scored steps in `tests/verify.ts`
+- **Verification steps:** 18 scored steps in `tests/verify.ts`
 - **Unit tests:** Mocha (`tests/**/*Tests.ts`)
 - **Simulation:** 98,000,000 rounds — 98 representative whole-percent targets (200, 300, …, 9900) × 1M rounds each. The closed-form RTP proof covers the full integer target range (2–9998).
 - **Anti-circularity:** theoretical RTP independently derived from `survivalProbability × payoutMultiplier = 0.999` for every valid integer target (2–9998) — flat 0.1% house edge confirmed across the full target range; the 98-target simulation provides representative coverage.
-- **Expected `npm test` result:** 17/17 PASS · PROVABLY FAIR — Full Pass
+- **Expected `npm test` result:** 18/18 PASS · PROVABLY FAIR — Full Pass
 
 ## Reproducibility
 

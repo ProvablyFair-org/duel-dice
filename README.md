@@ -20,7 +20,7 @@ npm install
 npm test
 ```
 
-`npm test` runs the full pipeline: unit tests + 98M-round simulation + 6,700-bet dataset verification. Expected: 17/17 PASS, **PROVABLY FAIR — Full Pass**.
+`npm test` runs the full pipeline: unit tests + 98M-round simulation + 6,700-bet dataset verification. Expected: 18/18 PASS, **PROVABLY FAIR — Full Pass**.
 
 Individual scripts:
 

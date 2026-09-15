@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-14T19:51:58.834Z",
+  "generatedAt": "2026-09-15T17:16:54.541Z",
   "totalBets": 6700,
   "totalSeeds": 138,
   "steps": [
@@ -43,7 +43,7 @@
       "step": 7,
       "name": "Payout Math",
       "status": "PASS",
-      "detail": "6700 bets checked, 0 errors (tolerance 1e-8)"
+      "detail": "6700 bets checked, 0 errors (relative tolerance 1e-12)"
     },
     {
       "step": 8,
@@ -109,7 +109,7 @@
       "step": 18,
       "name": "Artifact Integrity (pinned artifacts of record)",
       "status": "PASS",
-      "detail": "2 artifact(s) checked against src/artifact-pins.ts; rtp-convergence.html matches its pin; simulation-results.json matches its pin"
+      "detail": "4 artifact(s) checked against src/artifact-pins.ts; chi-squared-results.json matches its pin; determinism-log.json matches its pin; rtp-convergence.html matches its pin; simulation-results.json matches its pin"
     }
   ],
   "info": [

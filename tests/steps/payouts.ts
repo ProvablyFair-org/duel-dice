@@ -10,20 +10,29 @@ export function run(ctx: VerifyContext): StepResult[] {
   const { bets } = ctx;
 
   // ── Step 7: Payout math ───────────────────────────────────────────────────────
+  // TOLERANCE SIZED TO THE ARITHMETIC. Credited money here is a full-precision product, not a
+  // lattice value, so there is no grid to snap it to and the bound is the only thing between a
+  // served figure and its recomputation. `> 1e-8` was five orders looser than double arithmetic
+  // needs, and the off-grid forgery nudges a served payout by 1e-9 — it passed, measured across
+  // this fleet on 2026-09-15. MONEY_REL_TOL is relative so it scales with the figure, and is
+  // still orders of magnitude above the worst real deviation in every capture it guards.
+  const MONEY_REL_TOL = 1e-12;
+  const moneyTol = (x: number): number => MONEY_REL_TOL * Math.max(Math.abs(x), 1);
+
   let payoutErrors = 0;
   for (const b of bets) {
     const mult = parseFloat(b.response.multiplier);
     const amt  = parseFloat(b.request.amount);
     const won  = parseFloat(b.response.amount_won);
     if (b.response.is_win) {
-      if (Math.abs(amt * mult - won) > 1e-8) payoutErrors++;
+      if (!Number.isFinite(won) || Math.abs(amt * mult - won) > moneyTol(amt * mult)) payoutErrors++;
     } else {
       if (Math.abs(won) > 1e-12) payoutErrors++;
     }
   }
   const s7 = step(7, 'Payout Math',
     payoutErrors === 0 ? 'PASS' : 'FAIL',
-    `${bets.length} bets checked, ${payoutErrors} errors (tolerance 1e-8)`,
+    `${bets.length} bets checked, ${payoutErrors} errors (relative tolerance ${MONEY_REL_TOL})`,
   );
 
   // ── Step 8: Win condition ─────────────────────────────────────────────────────
