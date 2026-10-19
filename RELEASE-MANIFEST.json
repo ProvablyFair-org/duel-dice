@@ -1,0 +1,64 @@
+{
+  "auditId": "PF-2026-DL02",
+  "game": "dice",
+  "casino": "duel",
+  "release": "v1.1.0",
+  "framework": "1.1",
+  "simulation": {
+    "seeding": "pinned",
+    "seedSource": "src/simulate.ts SIM_SEEDS (design parameters in src/sim-config.ts)",
+    "attestation": "census byte-reproducible from the pinned seeds; derived statistics re-derived by Steps 16-17 on every npm test; regeneration (npm run test:full) is field-diffed against the committed artifact at the reproduction tolerance (outputs/run/diff.json)"
+  },
+  "runtime": {
+    "command": "npm test",
+    "measured": [
+      {
+        "date": "2026-09-28",
+        "machine": "Apple M2 Max",
+        "cores": 12,
+        "node": "22.23.1",
+        "wallSeconds": 10,
+        "by": "time npm test"
+      }
+    ]
+  },
+  "datasetSha256": "3550ffca07a6f7825f96cdd4e3d8c3cd57898b5b5238b9739753a754cff056d6",
+  "artifacts": {
+    "data/dice-master-6700bets.json": "3550ffca07a6f7825f96cdd4e3d8c3cd57898b5b5238b9739753a754cff056d6",
+    "outputs/simulation-results.json": "37355e1bdd6948276dc55f33f536a70d6f9aa803fdd03cb63da3d379a26bad66",
+    "outputs/chi-squared-results.json": "5ce2dc93a0e7f74fc3b3ac06af905de25d6e7d9993d8f3752cec0ccccf2ad75c",
+    "outputs/determinism-log.json": "966a9955e0beb3afd2bb493812d06aad2f51bb4db991f333c3a9ae010dfc7d53",
+    "outputs/rtp-convergence.html": "41958876c2a7630531da3f2fd9e2eb7feccbd893a863fbd049319b00c28b5677",
+    "outputs/verification-results.json": "156387db7d9f84b1239f1abfd0fab93813c44b14b3aaa490199bd15a54b97b4b",
+    "outputs/rtp-claim-table.json": "a69f53df3681ea1b419d18e8fbf044c50bdcfe85a5562d67c8f89e91e400f3c0"
+  },
+  "verdict": "PROVABLY FAIR — Full Pass",
+  "scored": {
+    "passed": 20,
+    "flags": 1,
+    "operatorFlags": 0,
+    "captureFlags": 1,
+    "hardFail": 0,
+    "of": 21
+  },
+  "capturedAt": {
+    "from": "2026-04-11T13:21:47.568Z",
+    "to": "2026-04-11T15:58:12.799Z"
+  },
+  "environment": {
+    "host": "duel.com",
+    "stage": "production",
+    "qualifier": null
+  },
+  "supersedes": "v1.0.0",
+  "signature": "SHA256:gEujiJm2pRyq7lQsfYQfQ1r97H/J7GdaKHbOW8GtikY",
+  "falsifiability": {
+    "registry": "tests/mutations.json",
+    "runner": "scripts/mutate.mjs",
+    "mutations": 49,
+    "killed": 49,
+    "declaredSurvivors": 0,
+    "source": "npm run mutate 2026-10-14 evening (Apple M2 Max, 12 cores, node v22.23.1), the whole registry (49 entries) in one run (baseline green) on the tree carrying the FIXPASS2 C3 entries: 49/49 killed, 21/21 scored steps covered; 2026-10-15 --only M13, MC3: 7/7 killed, MC3a/MC3b exit 5"
+  },
+  "pending": "supersedes is the latest tag read from ProvablyFair-org/duel-dice on 2026-09-28 (v1.0.0; the hand-written manifest this generator replaces left it null because the tag history had not been read)."
+}

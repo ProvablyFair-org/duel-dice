@@ -1,37 +1,56 @@
 /**
- * Two-pass simulation for Duel Dice.
+ * Duel.com Dice — two-pass Monte-Carlo simulation (PINNED, REPLAYABLE).
  *
- * Pass 1 — Fresh seeds (random HMAC keys):
- *   For each of 98 targets (200, 300, 400, ..., 9900 — full range):
- *     Simulate 1 seed × 1,000,000 rounds each.
- *     Record: win rate, chi-squared vs theoretical win_chance, serial independence.
- *     Track RTP snapshots at sample points for convergence chart.
+ * The experiment's CENSUS — the uniformity histogram, each band's win count, and every epoch's
+ * early/reference returns — is a deterministic function of the pinned seeds below and the pinned
+ * dataset, so a re-run reproduces the counts byte-for-byte and the verifier RE-DERIVES every scored
+ * statistic (chi-squared, RTP, runs z, cherry-pick z) from that census rather than trusting any
+ * scalar the artifact reports about itself (tests/steps/simulation.ts). Design floors live in
+ * src/sim-config.ts, single-sourced so producer and verifier cannot pin different experiments.
  *
- * Pass 2 — Casino seeds (10,000 nonces per seed):
- *   For each revealed server seed (using actual client seed from dataset):
- *     Target = 5000 (50% win rate — sufficient expected counts for chi-squared).
- *     Test A: chi-squared win rate on full nonce range 0–9,999 vs theoretical at α=0.01.
- *     Test B: chi-squared on early nonces (0–49) and late nonces (50–9,999)
- *             separately vs theoretical. Flags seeds whose early-epoch distribution
- *             deviates while the late range does not — the statistical signature
- *             of cherry-picked seeds.
+ *   Pass 1 — fresh pinned seeds:
+ *     • Draw uniformity: SIM_UNIFORMITY_DRAWS draws → SIM_UNIFORMITY_BINS-bin histogram (df 99),
+ *       plus lag-1 autocorrelation and the Wald–Wolfowitz runs census, and the observed roll
+ *       min/max (the ceiling witness DICE-17 reads).
+ *     • Edge convergence: SIM_EDGE_BANDS target bands spanning both ends, SIM_EDGE_BETS bets each;
+ *       every band's WIN COUNT is stored and the cross-band mean RTP is captured at the marks.
+ *   Pass 2 — the dataset's revealed server seeds, SIM_PASS2_NONCES nonces each:
+ *     early window = nonces 0 … SIM_PASS2_EARLY_WINDOW-1 (the captured depth per epoch; the captured
+ *     nonce range is 0–50, nonce 50 occurring only in the 4 capture-retry epochs, DL-1), reference
+ *     window = the remainder; the statistic is
+ *     the payout-weighted return of the bands the casino actually served in that epoch, standardized
+ *     by the exact per-bet mean/variance of that return (a scaled Poisson-binomial across seeds),
+ *     tested with a pre-registered one-sided normal (CLT) lower-tail.
  *
- * Output: outputs/simulation-results.json, outputs/rtp-convergence.html
+ * OUTPUT DIRECTORY. PF_EMIT=1 rewrites the pinned artifact in outputs/ (author, on regeneration);
+ * otherwise the run is written to outputs/run/ so `npm run test:full` can field-diff it against the
+ * pinned copy without touching the artifact of record.
+ *
+ * IF YOU REGENERATE you must re-pin src/loader.ts EXPECTED_HASH is unaffected (dataset unchanged),
+ * but every Pass-1 figure quoted in the .md chapters is now stale — sweep them in the same pass.
  */
 
 import * as fs     from 'fs';
 import * as path   from 'path';
-import { computeResult, computeResultFromBuffer, theoreticalWinChance, theoreticalMultiplier } from './rng';
-import { chiSquaredTest, lagOneAutocorrelation, waldsWolfowitzRunsTest } from './stats';
-import { loadDataset, buildSeedMap }            from './loader';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// Pinned charts carry no CDN script (review of 2026-09-28, item F16): the library is inlined verbatim from the
+// chart.js devDependency (exact version, package-lock.json), so the artifact renders offline, forever,
+// and every byte it executes is inside the pinned file.
+const CHARTJS_SOURCE = fs.readFileSync(path.join(path.dirname(require.resolve('chart.js')), 'chart.umd.js'), 'utf8');
+import { computeResultFromBuffer, theoreticalWinChance, theoreticalMultiplier, RANGE } from './rng';
+import {
+  chiSquaredTest, chiSquaredPValue, lagOneAutocorrelation,
+  runsStatisticFromCounts, binomialTailP, inverseCriticalZ, normalLowerTailP,
+} from './stats';
+import { loadDataset, buildSeedMap, groupByHash } from './loader';
+import {
+  ALPHA, ALPHA_SCREEN, SIM_UNIFORMITY_DRAWS, SIM_UNIFORMITY_BINS,
+  SIM_EDGE_BETS, SIM_EDGE_TARGETS, SIM_CONVERGENCE_MARKS, THEORETICAL_RTP,
+  SIM_PASS2_NONCES, SIM_PASS2_EARLY_WINDOW, SIM_PASS2_ALPHA,
+} from './sim-config';
 
-// Pass 1 simulation seeds — one unique pinned seed pair per target (98 total).
-// Each pair generated once via crypto.randomBytes(32/16), pinned for reproducibility.
-// Using distinct seeds per target prevents cross-target correlation artifacts:
-// a single seed would produce the same HMAC-SHA256 byte stream for every target,
-// meaning win/loss outcomes at similar thresholds would be correlated.
+// Pinned simulation seeds — one unique pair per use. Generated once via crypto.randomBytes(32/16),
+// pinned for reproducibility; distinct seeds per band avoid cross-target correlation artefacts.
 const SIM_SEEDS: { server: string; client: string }[] = [
   {server:"1249d85943dd2fa3e804098fa2e23fbff48d93c0b6c59c603a029653c15592a3",client:"162ce7214dbb52fef1811744082281d2"},
   {server:"4107109b995299a043c54ef4619d89710fffd47e828da4cc17b4c89e0be77f41",client:"d764059977d5b0737ed24f25cc09e2f9"},
@@ -133,490 +152,257 @@ const SIM_SEEDS: { server: string; client: string }[] = [
   {server:"819f09d40900c29a9a2730fa7f8970a26f00925c27c972b6f1595abf04790be6",client:"8312fd086ba40a4aa67f6860f824c3b4"},
 ];
 
-/**
- * Binomial survival function: P(X >= k) where X ~ Binomial(n, p).
- * Uses direct summation for small k, complement for large k.
- */
-function binomialSurvival(k: number, n: number, p: number): number {
-  if (k <= 0) return 1;
-  if (k > n) return 0;
-
-  // Compute P(X < k) = sum_{i=0}^{k-1} C(n,i) * p^i * (1-p)^(n-i)
-  // Use log-space to avoid overflow
-  const q = 1 - p;
-  let cumulative = 0;
-  let logBinom = 0; // log(C(n,0)) = 0
-  for (let i = 0; i < k; i++) {
-    if (i > 0) logBinom += Math.log(n - i + 1) - Math.log(i);
-    const logProb = logBinom + i * Math.log(p) + (n - i) * Math.log(q);
-    cumulative += Math.exp(logProb);
-  }
-  return Math.max(0, 1 - cumulative);
-}
-
 function progressBar(current: number, total: number, label: string, startMs: number): void {
   const pct    = current / total;
   const filled = Math.round(pct * 30);
-  const bar    = '\u2501'.repeat(filled) + '\u254C'.repeat(30 - filled);
+  const bar    = '━'.repeat(filled) + '╌'.repeat(30 - filled);
   const elapsed = (Date.now() - startMs) / 1000;
   const eta     = pct > 0 ? (elapsed / pct) * (1 - pct) : 0;
   process.stdout.write(`\r  ${bar} ${(pct * 100).toFixed(0)}% ${label} [${elapsed.toFixed(0)}s / ETA ${eta.toFixed(0)}s]`);
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Output directory ────────────────────────────────────────────────────────────
+// PF_EMIT=1 rewrites the pinned artifact; otherwise the run lands in outputs/run/ so test:full can
+// diff it against the pin without disturbing the artifact of record.
+const PF_EMIT = process.env.PF_EMIT === '1';
+const OUT_BASE = path.join(__dirname, '../outputs');
+const OUT = PF_EMIT ? OUT_BASE : path.join(OUT_BASE, 'run');
+fs.mkdirSync(OUT, { recursive: true });
 
-// 98 targets: 200, 300, 400, ..., 9900 (full range in steps of 100)
-const PASS1_TARGETS     = Array.from({ length: 98 }, (_, i) => (i + 2) * 100);
-const PASS1_ROUNDS_EACH = 1_000_000;
-const PASS1_SEEDS       = 1;    // single seed per target, 1M rounds
-const CONVERGENCE_SAMPLES = [10_000, 50_000, 100_000, 500_000, 1_000_000];
-const THEORETICAL_RTP   = 0.999; // 99.9% — uniform 0.1% house edge across all targets
-
-// ── Pass 1 ────────────────────────────────────────────────────────────────────
-
+// ══════════════════════════════════════════════════════════════════════════════
+//  PASS 1 — draw uniformity + serial independence + edge convergence
+// ══════════════════════════════════════════════════════════════════════════════
 console.log('=== Pass 1 — Fresh Seeds ===');
-console.log(`  ${PASS1_TARGETS.length} targets \u00d7 ${PASS1_SEEDS} seeds \u00d7 ${PASS1_ROUNDS_EACH.toLocaleString()} rounds`);
-console.log('');
 
-interface Pass1Result {
-  target: number;
-  theoreticalWinChance: number;
-  simWinRate: number;
-  chi2: number;
-  df: number;
-  pValue: number;
-  lag1R: number;
-  lag1Z: number;
-  runsP: number;
-  rtpSnapshots: { roundCount: number; rtp: number }[];
+// ── (1) Draw-uniformity census: SIM_UNIFORMITY_DRAWS draws from one pinned seed ──
+console.log(`  uniformity: ${SIM_UNIFORMITY_DRAWS.toLocaleString()} draws × ${SIM_UNIFORMITY_BINS} bins`);
+const uniKey = Buffer.from(SIM_SEEDS[0].server, 'hex');
+const uniClient = SIM_SEEDS[0].client;
+const BIN_WIDTH = RANGE / SIM_UNIFORMITY_BINS;                 // 10001/100 = 100.01
+const uniHist = new Array<number>(SIM_UNIFORMITY_BINS).fill(0);
+let rollMin = RANGE, rollMax = -1;
+// Serial accumulators (lag-1 needs the sequence for the exact estimator; the runs census is stored
+// so the verifier can re-derive runsZ from cell counts).
+const uniStart = Date.now();
+let prevRoll = -1;
+let sumX = 0, sumXsq = 0, sumAdj = 0;                          // Σx, Σx², Σ xᵢxᵢ₊₁
+let runsCount = 0, n1 = 0;                                     // runs about the lattice midpoint
+const MID = (RANGE - 1) / 2;                                   // 5000
+let prevSide = -1;
+for (let n = 0; n < SIM_UNIFORMITY_DRAWS; n++) {
+  const roll = computeResultFromBuffer(uniKey, uniClient, n);
+  uniHist[Math.min(SIM_UNIFORMITY_BINS - 1, Math.floor(roll / BIN_WIDTH))]++;
+  if (roll < rollMin) rollMin = roll;
+  if (roll > rollMax) rollMax = roll;
+  sumX += roll; sumXsq += roll * roll;
+  if (n > 0) sumAdj += prevRoll * roll;
+  const side = roll >= MID ? 1 : 0;
+  if (side === 1) n1++;
+  if (n === 0) { runsCount = 1; } else if (side !== prevSide) { runsCount++; }
+  prevSide = side;
+  prevRoll = roll;
+  if (n % 200000 === 0) progressBar(n, SIM_UNIFORMITY_DRAWS, 'uniformity', uniStart);
 }
+process.stdout.write('\n');
+// lag-1 autocorrelation from the running sums (exact estimator over the full sequence).
+const uN = SIM_UNIFORMITY_DRAWS;
+const uMean = sumX / uN;
+// Σ(xᵢ-μ)(xᵢ₊₁-μ) over i=0..n-2 = Σxᵢxᵢ₊₁ - μ(Σ_{0..n-2}xᵢ + Σ_{1..n-1}xᵢ) + (n-1)μ²
+//                               = sumAdj - μ((sumX - xLast) + (sumX - xFirst)) + (n-1)μ²
+// The two edge terms are negligible at this depth but retained for exactness would need xFirst/xLast;
+// they shift the numerator by O(μ·range/n) ≈ 1e-3 of one term, far below any screen. Use the
+// standard large-sample estimator instead, which the verifier reproduces from lag1·√n.
+const uVar = sumXsq / uN - uMean * uMean;
+const uLag1 = uVar > 0 ? (sumAdj / (uN - 1) - uMean * uMean) / uVar : 0;
+const uLag1Z = uLag1 * Math.sqrt(uN);
+const uni = chiSquaredTest(uniHist, new Array(SIM_UNIFORMITY_BINS).fill(uN / SIM_UNIFORMITY_BINS));
+const runsCensus = runsStatisticFromCounts(runsCount, n1, uN);
+console.log(`  uniformity chi2=${uni.chi2.toFixed(3)} df=${uni.df} p=${uni.pValue.toFixed(4)} | lag1Z=${uLag1Z.toFixed(3)} | runsZ=${runsCensus.z.toFixed(3)} | roll[${rollMin},${rollMax}]`);
 
-const pass1Results: Pass1Result[] = [];
-let pass1Chi2Fails = 0;
-
-const pass1Start = Date.now();
-
-for (let ti = 0; ti < PASS1_TARGETS.length; ti++) {
-  const target = PASS1_TARGETS[ti];
-  const theor  = theoreticalWinChance(target);
-  const mult   = theoreticalMultiplier(target);
-  let totalWins   = 0;
-  let totalRounds = 0;
-  let totalPayout = 0;
-  const hitSequence: number[] = [];
-  const rtpSnapshots: { roundCount: number; rtp: number }[] = [];
-  let nextSampleIdx = 0;
-
-  for (let s = 0; s < PASS1_SEEDS; s++) {
-    const seed = SIM_SEEDS[ti];
-    const key = Buffer.from(seed.server, 'hex');
-    for (let n = 0; n < PASS1_ROUNDS_EACH; n++) {
-      const result = computeResultFromBuffer(key, seed.client, n);
-      hitSequence.push(result);
-      if (result > target) {
-        totalWins++;
-        totalPayout += mult;
-      }
-      totalRounds++;
-
-      // Record RTP snapshot at sample points (across all seeds combined)
-      if (nextSampleIdx < CONVERGENCE_SAMPLES.length && totalRounds === CONVERGENCE_SAMPLES[nextSampleIdx]) {
-        rtpSnapshots.push({ roundCount: totalRounds, rtp: (totalPayout / totalRounds) * 100 });
-        nextSampleIdx++;
-      }
-    }
-  }
-
-  const simWinRate = totalWins / totalRounds;
-  const n          = totalRounds;
-  const observed   = [totalWins, n - totalWins];
-  const expected   = [theor * n, (1 - theor) * n];
-  const { chi2, df, pValue } = chiSquaredTest(observed, expected);
-  if (pValue < 0.01) pass1Chi2Fails++;
-
-  // Serial independence: lag-1 autocorrelation + Wald-Wolfowitz runs test
-  const lag1R = lagOneAutocorrelation(hitSequence);
-  const lag1Z = lag1R * Math.sqrt(hitSequence.length);
-  const runs  = waldsWolfowitzRunsTest(hitSequence);
-
-  pass1Results.push({ target, theoreticalWinChance: theor, simWinRate, chi2, df, pValue, lag1R, lag1Z, runsP: runs.pValue, rtpSnapshots });
-
-  progressBar(ti + 1, PASS1_TARGETS.length, `target=${target}`, pass1Start);
-}
-
-process.stdout.write('\n\n');
-
-// ── Convergence data (cross-target mean RTP at increasing round counts) ──────
-
-interface ConvergencePoint {
-  roundCount: number;
-  meanRTP: number;
-  stdDev: number;
-}
-
-const convergenceData: ConvergencePoint[] = [];
-
-for (const samplePoint of CONVERGENCE_SAMPLES) {
-  const rtpsAtPoint: number[] = [];
-  for (const r of pass1Results) {
-    const snap = r.rtpSnapshots.find(s => s.roundCount === samplePoint);
-    if (snap) rtpsAtPoint.push(snap.rtp);
-  }
-  if (rtpsAtPoint.length === 0) continue;
-  const mean = rtpsAtPoint.reduce((a, b) => a + b, 0) / rtpsAtPoint.length;
-  const variance = rtpsAtPoint.length > 1
-    ? rtpsAtPoint.reduce((a, b) => a + (b - mean) ** 2, 0) / (rtpsAtPoint.length - 1)
-    : 0;
-  const stdErr = rtpsAtPoint.length > 1 ? Math.sqrt(variance) / Math.sqrt(rtpsAtPoint.length) : 0;
-  convergenceData.push({
-    roundCount: samplePoint,
-    meanRTP: mean,
-    stdDev: stdErr,
-  });
-}
-
-const pass1SerialFails = pass1Results.filter(r => Math.abs(r.lag1Z) > 3 || r.runsP < 0.01).length;
-
-// FWER reporting
-const bonferroniAlpha = 0.01 / PASS1_TARGETS.length;
-console.log(`  FWER: Bonferroni \u03b1/N = ${bonferroniAlpha.toFixed(6)} (N=${PASS1_TARGETS.length})`);
-console.log(`  Chi-squared fails (uncorrected \u03b1=0.01): ${pass1Chi2Fails}/${PASS1_TARGETS.length}`);
-console.log(`  Serial independence fails: ${pass1SerialFails}/${PASS1_TARGETS.length} (|z|>3 or runs p<0.01)`);
-
-const meanRtp = pass1Results.reduce((a, r) => a + r.simWinRate * theoreticalMultiplier(r.target) * 100, 0) / pass1Results.length;
-console.log(`  Mean simulated RTP: ${meanRtp.toFixed(4)}%`);
-
-const pass1Summary = {
-  targets:                  PASS1_TARGETS.length,
-  roundsPerTarget:          PASS1_SEEDS * PASS1_ROUNDS_EACH,
-  totalRounds:              PASS1_TARGETS.length * PASS1_SEEDS * PASS1_ROUNDS_EACH,
-  chi2FailsAtAlpha01:       pass1Chi2Fails,
-  serialIndependenceFails:  pass1SerialFails,
-  bonferroniAlpha,
-  meanRtp,
-  convergence:              convergenceData,
-  results:                  pass1Results,
+const uniformity = {
+  draws: SIM_UNIFORMITY_DRAWS,
+  bins: SIM_UNIFORMITY_BINS,
+  n: uN,
+  df: uni.df,
+  histogram: uniHist,
+  chi2: uni.chi2,
+  pValue: uni.pValue,
+  rollMin, rollMax,
+  serial: {
+    n: uN,
+    lag1: uLag1, lag1Z: uLag1Z,
+    runs: runsCount, n1, runsZ: runsCensus.z, runsP: runsCensus.pValue,
+  },
 };
 
-// ── Pass 2 ────────────────────────────────────────────────────────────────────
-
-console.log('\n=== Pass 2 — Casino Seeds ===');
-
-const dataset  = loadDataset();
-const seedMap  = buildSeedMap(dataset.seeds);
-
-// Build map: serverSeedHashed → most common clientSeed used in actual bets
-const clientSeedForHash = new Map<string, string>();
-for (const [hash] of seedMap) {
-  const counts = new Map<string, number>();
-  for (const bet of dataset.bets) {
-    if (bet.response.server_seed_hashed === hash) {
-      const cs = bet.response.client_seed;
-      counts.set(cs, (counts.get(cs) || 0) + 1);
+// ── (2) Edge convergence: SIM_EDGE_BANDS bands spanning both ends ────────────────
+console.log(`  edge bands: ${SIM_EDGE_TARGETS.length} × ${SIM_EDGE_BETS.toLocaleString()} bets`);
+interface EdgeRow { target: number; theoreticalWinChance: number; n: number; wins: number; }
+const edgeRows: EdgeRow[] = [];
+// convergence: cumulative RTP per band at each mark → cross-band mean + SE.
+const markRtps: number[][] = SIM_CONVERGENCE_MARKS.map(() => []);
+const edgeStart = Date.now();
+for (let bi = 0; bi < SIM_EDGE_TARGETS.length; bi++) {
+  const target = SIM_EDGE_TARGETS[bi];
+  const mult = theoreticalMultiplier(target);
+  const key = Buffer.from(SIM_SEEDS[bi].server, 'hex');
+  const client = SIM_SEEDS[bi].client;
+  let wins = 0, payout = 0, markIdx = 0;
+  for (let n = 0; n < SIM_EDGE_BETS; n++) {
+    const roll = computeResultFromBuffer(key, client, n);
+    if (roll > target) { wins++; payout += mult; }
+    if (markIdx < SIM_CONVERGENCE_MARKS.length && (n + 1) === SIM_CONVERGENCE_MARKS[markIdx]) {
+      markRtps[markIdx].push((payout / (n + 1)) * 100);
+      markIdx++;
     }
   }
-  if (counts.size > 0) {
-    // Pick the most common client seed
-    let bestCS = '';
-    let bestCount = 0;
-    for (const [cs, count] of counts) {
-      if (count > bestCount) { bestCS = cs; bestCount = count; }
-    }
-    clientSeedForHash.set(hash, bestCS);
-  }
+  edgeRows.push({ target, theoreticalWinChance: theoreticalWinChance(target), n: SIM_EDGE_BETS, wins });
+  progressBar(bi + 1, SIM_EDGE_TARGETS.length, `target=${target}`, edgeStart);
 }
+process.stdout.write('\n');
 
-// Cherry-pick test at target=5000 (50% win rate) — expected wins in 50 nonces = 25, well above chi-squared minimum of 5
-const CHERRY_PICK_TARGET = 5000;
-const CHERRY_PICK_THEOR  = theoreticalWinChance(CHERRY_PICK_TARGET);
+// Cross-band mean RTP at each mark (± SE across bands), for the convergence chart.
+const convergence = SIM_CONVERGENCE_MARKS.map((mark, i) => {
+  const xs = markRtps[i];
+  const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const variance = xs.length > 1 ? xs.reduce((a, b) => a + (b - mean) ** 2, 0) / (xs.length - 1) : 0;
+  const stdErr = xs.length > 1 ? Math.sqrt(variance) / Math.sqrt(xs.length) : 0;
+  return { roundCount: mark, meanRTP: mean, stdDev: stdErr };
+});
+// Mean simulated RTP over the edge bands, recomputed from win counts.
+const meanRtp = edgeRows.reduce((a, r) => a + (r.wins / r.n) * theoreticalMultiplier(r.target) * 100, 0) / edgeRows.length;
+console.log(`  mean simulated RTP (edge bands): ${meanRtp.toFixed(4)}%`);
 
-const pass2Results: {
+const pass1 = {
+  alpha: ALPHA,
+  alphaScreen: ALPHA_SCREEN,
+  bands: SIM_EDGE_TARGETS.length,
+  betsPerBand: SIM_EDGE_BETS,
+  meanRtp,
+  uniformity,
+  edge: edgeRows,
+  convergence,
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  PASS 2 — served-band cherry-pick, exact per-bet moments + normal (CLT) lower-tail
+// ══════════════════════════════════════════════════════════════════════════════
+console.log('\n=== Pass 2 — Casino Seeds (served-band return) ===');
+const dataset = loadDataset();
+const seedMap = buildSeedMap(dataset.seeds);
+const byHash  = groupByHash(dataset.bets);
+
+interface EpochRow {
   serverSeedHashed: string;
-  clientSeed: string;
-  target: number;
-  earlyWins: number; earlyTotal: number; early_p: number;
-  lateWins:  number; lateTotal:  number; late_p: number;
-  testA_chi2_fail: boolean;
-  cherry_pick_flag: boolean;
-}[] = [];
-
-let pass2TestAFails  = 0;
-let pass2TestBFlags  = 0;
-
-const NONCES_PER_SEED = 10_000;
-const EPOCH_LENGTH    = 50;   // nonces 0–49: the live capture window (early)
-
-const seedEntries = Array.from(seedMap.entries());
-console.log(`  ${seedEntries.length} revealed seeds \u00d7 target=${CHERRY_PICK_TARGET} (${(CHERRY_PICK_THEOR * 100).toFixed(1)}% win rate)`);
-console.log(`  ${NONCES_PER_SEED.toLocaleString()} nonces per seed (early: 0\u2013${EPOCH_LENGTH - 1}, late: ${EPOCH_LENGTH}\u2013${NONCES_PER_SEED - 1})`);
-
-const pass2Start = Date.now();
-
+  earlyN: number; earlyReturn: number; earlyExpected: number; earlyVar: number;
+  refN: number; refReturn: number; refExpected: number; refVar: number;
+}
+const perEpoch: EpochRow[] = [];
+const W = SIM_PASS2_EARLY_WINDOW;
+const seedEntries = [...seedMap.entries()];
+console.log(`  ${seedEntries.length} revealed epochs × ${SIM_PASS2_NONCES.toLocaleString()} nonces (early 0–${W - 1}, ref ${W}–${SIM_PASS2_NONCES - 1})`);
+const p2Start = Date.now();
 for (let si = 0; si < seedEntries.length; si++) {
   const [hash, serverSeed] = seedEntries[si];
-  const clientSeed = clientSeedForHash.get(hash) || 'auditSeed';
-  const keyBuf = Buffer.from(serverSeed, 'hex');
+  const epochBets = (byHash.get(hash) ?? []).slice().sort((a, b) => a.response.nonce - b.response.nonce);
+  if (epochBets.length === 0) continue;
+  const clientSeed = epochBets[0].response.client_seed;
+  const key = Buffer.from(serverSeed, 'hex');
+  // Served targets, indexed by the nonce they were served at (0..W-1). Missing nonces (capture
+  // retries) fall back to the previous served target (the epoch's first served target if nonce 0
+  // is missing) so the tiled reference stays defined.
+  const served: number[] = new Array(W);
+  for (const b of epochBets) if (b.response.nonce < W) served[b.response.nonce] = b.request.target;
+  let lastSeen = epochBets[0].request.target;
+  for (let i = 0; i < W; i++) { if (served[i] === undefined) served[i] = lastSeen; else lastSeen = served[i]; }
 
-  // Early nonces 0–49, late nonces 50–9999
-  let earlyWins = 0;
-  let lateWins  = 0;
-
-  for (let n = 0; n < NONCES_PER_SEED; n++) {
-    const result = computeResultFromBuffer(keyBuf, clientSeed, n);
-    if (result > CHERRY_PICK_TARGET) {
-      if (n < EPOCH_LENGTH) earlyWins++;
-      else                  lateWins++;
-    }
+  let earlyReturn = 0, earlyExpected = 0, earlyVar = 0;
+  let refReturn = 0, refExpected = 0, refVar = 0;
+  for (let n = 0; n < SIM_PASS2_NONCES; n++) {
+    const target = served[n % W];
+    const mult = theoreticalMultiplier(target);
+    const p = theoreticalWinChance(target);
+    const roll = computeResultFromBuffer(key, clientSeed, n);
+    const ret = roll > target ? mult : 0;
+    const eRet = p * mult;                     // = 0.999 exactly
+    const vRet = p * (1 - p) * mult * mult;    // exact lattice variance of the scaled Bernoulli
+    if (n < W) { earlyReturn += ret; earlyExpected += eRet; earlyVar += vRet; }
+    else       { refReturn += ret;   refExpected += eRet;   refVar += vRet; }
   }
-
-  // Test A: chi-squared on full range (10,000 rounds)
-  const totalWins = earlyWins + lateWins;
-  const { pValue: pA } = chiSquaredTest(
-    [totalWins, NONCES_PER_SEED - totalWins],
-    [CHERRY_PICK_THEOR * NONCES_PER_SEED, (1 - CHERRY_PICK_THEOR) * NONCES_PER_SEED],
-  );
-  const testA_fail = pA < 0.01;
-  if (testA_fail) pass2TestAFails++;
-
-  // Test B: compare early vs late win rate — cherry-picking detection
-  const lateCount = NONCES_PER_SEED - EPOCH_LENGTH;
-  const { pValue: pEarly } = chiSquaredTest(
-    [earlyWins, EPOCH_LENGTH - earlyWins],
-    [CHERRY_PICK_THEOR * EPOCH_LENGTH, (1 - CHERRY_PICK_THEOR) * EPOCH_LENGTH],
-  );
-  const { pValue: pLate } = chiSquaredTest(
-    [lateWins, lateCount - lateWins],
-    [CHERRY_PICK_THEOR * lateCount, (1 - CHERRY_PICK_THEOR) * lateCount],
-  );
-  // Cherry-picking signature: early deviates from binomial, late does not
-  const cherry_pick_flag = pEarly < 0.05 && pLate >= 0.05;
-  if (cherry_pick_flag) pass2TestBFlags++;
-
-  pass2Results.push({
+  perEpoch.push({
     serverSeedHashed: hash,
-    clientSeed,
-    target: CHERRY_PICK_TARGET,
-    earlyWins, earlyTotal: EPOCH_LENGTH, early_p: pEarly,
-    lateWins,  lateTotal:  lateCount, late_p:  pLate,
-    testA_chi2_fail: testA_fail,
-    cherry_pick_flag,
+    earlyN: W, earlyReturn, earlyExpected, earlyVar,
+    refN: SIM_PASS2_NONCES - W, refReturn, refExpected, refVar,
   });
-
-  progressBar(si + 1, seedEntries.length, `seed ${si + 1}/${seedEntries.length}`, pass2Start);
+  progressBar(si + 1, seedEntries.length, `epoch ${si + 1}/${seedEntries.length}`, p2Start);
 }
+process.stdout.write('\n');
 
-process.stdout.write('\n\n');
+// Aggregate the early-window return across epochs. The true null is Poisson-binomial (a sum of
+// independent scaled Bernoullis), so the aggregate mean and variance are the sums of the per-bet
+// EXACT mean and variance; the tail is a normal (CLT) approximation to that null, not its exact
+// CDF. One-sided normal (CLT) LOWER-tail test (cherry-picking shorts the early window).
+const totalEarlyReturn   = perEpoch.reduce((a, r) => a + r.earlyReturn, 0);
+const totalEarlyExpected = perEpoch.reduce((a, r) => a + r.earlyExpected, 0);
+const totalEarlyVar      = perEpoch.reduce((a, r) => a + r.earlyVar, 0);
+const aggEarlyZ = totalEarlyVar > 0 ? (totalEarlyReturn - totalEarlyExpected) / Math.sqrt(totalEarlyVar) : 0;
+const aggEarlyP = normalLowerTailP(aggEarlyZ);                 // one-sided lower tail
+const below = perEpoch.filter(r => r.earlyReturn < r.earlyExpected).length;
+const above = perEpoch.length - below;
+// Detection power: the smallest per-window return DEFICIT (as a fraction of a fair unit of return)
+// the aggregate one-sided test rejects at ALPHA with power 0.8.
+const zAlpha = inverseCriticalZ(2 * SIM_PASS2_ALPHA);         // one-sided α critical z
+const zPower = inverseCriticalZ(2 * 0.20);                    // z for 0.8 power
+const minDetectableReturnShift = (zAlpha + zPower) * Math.sqrt(totalEarlyVar);
+const totalEarlyBets = perEpoch.reduce((a, r) => a + r.earlyN, 0);
+const minDetectablePerBetPct = (minDetectableReturnShift / totalEarlyBets) * 100;
+console.log(`  early return ${totalEarlyReturn.toFixed(2)} vs expected ${totalEarlyExpected.toFixed(2)} (var ${totalEarlyVar.toFixed(2)}) → z=${aggEarlyZ.toFixed(3)}, one-sided p=${aggEarlyP.toFixed(4)}`);
+console.log(`  direction split: ${below} epochs below expectation, ${above} above; detection power: ${minDetectablePerBetPct.toFixed(4)} pp per-bet return deficit at 80% power`);
 
-const N = pass2Results.length;
-
-// Binomial p-value for cherry-pick flag count:
-// Under H₀, each seed flags independently with P(flag) ≈ 0.05 × 0.95 ≈ 0.0475.
-// We use the exact binomial survival P(X >= observed | n=N, p=0.05) as a conservative
-// upper bound. PASS if p >= 0.01, FAIL if p < 0.01.
-const cherryPickBinomP = binomialSurvival(pass2TestBFlags, N, 0.05);
-const cherryPickVerdict = cherryPickBinomP >= 0.01 ? 'PASS' : 'FAIL';
-
-const testABinomP = binomialSurvival(pass2TestAFails, N, 0.01);
-const testAVerdict = testABinomP >= 0.01 ? 'PASS' : 'FAIL';
-
-const pass2Summary = {
-  seed_count:                    N,
-  target:                        CHERRY_PICK_TARGET,
-  theoretical_win_chance:        CHERRY_PICK_THEOR,
-  nonces_per_seed:               NONCES_PER_SEED,
-  epoch_length:                  EPOCH_LENGTH,
-  test_a_chi2_fails_at_alpha01:  pass2TestAFails,
-  test_a_binom_p:                testABinomP,
-  test_a_verdict:                testAVerdict,
-  test_b_cherry_pick_flags:      pass2TestBFlags,
-  test_b_binom_p:                cherryPickBinomP,
-  test_b_verdict:                cherryPickVerdict,
-  results: pass2Results,
+const pass2 = {
+  nonces: SIM_PASS2_NONCES,
+  earlyWindow: W,
+  alpha: SIM_PASS2_ALPHA,
+  epochs: perEpoch.length,
+  totalEarlyReturn, totalEarlyExpected, totalEarlyVar,
+  aggEarlyZ, aggEarlyP,
+  directionBelow: below, directionAbove: above,
+  minDetectableReturnShift, minDetectablePerBetPct,
+  perEpoch,
 };
 
-console.log(`  Test A: ${pass2TestAFails}/${N} chi-squared fails — binomial P(X\u2265${pass2TestAFails}|n=${N},p=0.01) = ${testABinomP.toFixed(6)} — ${testAVerdict}`);
-console.log(`  Test B: ${pass2TestBFlags}/${N} cherry-pick flags — binomial P(X\u2265${pass2TestBFlags}|n=${N},p=0.05) = ${cherryPickBinomP.toFixed(6)} — ${cherryPickVerdict}`);
+// ══════════════════════════════════════════════════════════════════════════════
+//  Write census
+// ══════════════════════════════════════════════════════════════════════════════
+// NO RUN METADATA. The bytes are a function of the experiment alone (pinned seeds + pinned
+// dataset), so re-running reproduces the census exactly.
+const output = { model: { range: RANGE, houseEdge: 1 - THEORETICAL_RTP }, pass1, pass2 };
+fs.writeFileSync(path.join(OUT, 'simulation-results.json'), JSON.stringify(output, null, 2));
 
-// ── Write output ──────────────────────────────────────────────────────────────
-
-const outDir = path.join(__dirname, '../outputs');
-if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-
-const output = {
-  generatedAt: new Date().toISOString(),
-  pass1_fresh_seeds:  pass1Summary,
-  pass2_casino_seeds: pass2Summary,
-};
-
-fs.writeFileSync(path.join(outDir, 'simulation-results.json'), JSON.stringify(output, null, 2));
-
-// ── Generate RTP Convergence Chart (self-contained HTML) ─────────────────────
-
-const lastPoint = convergenceData[convergenceData.length - 1];
-const finalRTP  = lastPoint.meanRTP;
-
+// ── Convergence chart (self-contained: data and Chart.js both inline, report-only HTML) ──
+const finalRTP = convergence[convergence.length - 1].meanRTP;
 const chartHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Duel.com Dice RTP Convergence \u2014 ${PASS1_TARGETS.length} Targets \u00d7 1M Rounds Each</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"><\/script>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fafafa; padding: 24px; }
-  .container { max-width: 1100px; margin: 0 auto; background: #fff; border-radius: 12px; border: 1px solid #e0e0e0; padding: 32px; }
-  h1 { text-align: center; font-size: 16px; font-weight: 600; color: #333; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 24px; }
-  .chart-wrap { position: relative; height: 420px; }
-  .final-box { display: inline-block; border: 2px solid #4caf50; border-radius: 8px; padding: 10px 20px; margin-top: 20px; }
-  .final-box .label { font-size: 13px; color: #666; }
-  .final-box .value { font-size: 22px; font-weight: 700; color: #2e7d32; }
-  .final-box .check { color: #4caf50; font-size: 18px; }
-  .legend { text-align: center; margin-top: 12px; font-size: 13px; color: #666; }
-  .legend span { margin: 0 12px; }
-  .legend .dot { display: inline-block; width: 12px; height: 3px; vertical-align: middle; margin-right: 4px; }
-</style>
-</head>
-<body>
-<div class="container">
-  <h1>Duel.com Dice RTP Convergence \u2014 ${PASS1_TARGETS.length} Targets \u00d7 1M Rounds Each</h1>
-  <div class="chart-wrap"><canvas id="chart"></canvas></div>
-  <div class="legend">
-    <span><span class="dot" style="background:#1565c0;height:3px"></span> Mean RTP</span>
-    <span><span class="dot" style="background:rgba(229,115,115,0.5);height:3px"></span> \u00b12 SE band</span>
-    <span><span class="dot" style="background:#e57373;border-top:2px dashed #e57373;height:0"></span> Theoretical (${(THEORETICAL_RTP * 100).toFixed(1)}%)</span>
-  </div>
-  <div style="text-align:right; margin-top:8px;">
-    <div class="final-box">
-      <span class="label">Final Mean RTP (1M rounds):</span>
-      <span class="value">${finalRTP.toFixed(3)}%</span>
-      <span class="check">\u2713</span>
-    </div>
-  </div>
-</div>
+<html lang="en"><head><meta charset="UTF-8">
+<title>Duel.com Dice RTP Convergence — ${SIM_EDGE_TARGETS.length} Bands × ${SIM_EDGE_BETS.toLocaleString()} Bets Each</title>
+<!-- Chart.js 4.4.7 dist/chart.umd.js inlined verbatim from the npm package pinned in package-lock.json -->
+<script>${CHARTJS_SOURCE}<\/script>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#fafafa;padding:24px}.container{max-width:1100px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e0e0e0;padding:32px}h1{text-align:center;font-size:16px;font-weight:600;color:#333;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:24px}.chart-wrap{position:relative;height:420px}.final-box{display:inline-block;border:2px solid #4caf50;border-radius:8px;padding:10px 20px;margin-top:20px}.final-box .label{font-size:13px;color:#666}.final-box .value{font-size:22px;font-weight:700;color:#2e7d32}</style></head>
+<body><div class="container"><h1>Duel.com Dice RTP Convergence — ${SIM_EDGE_TARGETS.length} Bands × ${SIM_EDGE_BETS.toLocaleString()} Bets Each</h1>
+<div class="chart-wrap"><canvas id="chart"></canvas></div>
+<div style="text-align:right;margin-top:8px"><div class="final-box"><span class="label">Final Mean RTP:</span> <span class="value">${finalRTP.toFixed(3)}%</span> ✓</div></div></div>
 <script>
-const data = ${JSON.stringify(convergenceData.map(d => ({
-  x: d.roundCount,
-  y: d.meanRTP,
-  sd: d.stdDev,
-})))};
+const data=${JSON.stringify(convergence.map(d => ({ x: d.roundCount, y: d.meanRTP, sd: d.stdDev })))};
+const theoretical=${(THEORETICAL_RTP * 100).toFixed(6)};
+const labels=data.map(d=>{const m=d.x/1e6;return m>=1?m.toFixed(0)+'M':(d.x/1e3).toFixed(0)+'K';});
+new Chart(document.getElementById('chart').getContext('2d'),{type:'line',data:{labels,datasets:[
+{label:'+2 SE',data:data.map(d=>d.y+d.sd*2),borderColor:'rgba(229,115,115,0.4)',borderWidth:1,fill:false,pointRadius:0,tension:0.3},
+{label:'-2 SE',data:data.map(d=>d.y-d.sd*2),borderColor:'rgba(229,115,115,0.4)',borderWidth:1,fill:false,pointRadius:0,tension:0.3},
+{label:'Theoretical',data:data.map(()=>theoretical),borderColor:'#e57373',borderWidth:2,borderDash:[8,4],fill:false,pointRadius:0},
+{label:'Mean RTP',data:data.map(d=>d.y),borderColor:'#1565c0',borderWidth:2.5,fill:false,pointRadius:3,tension:0.3}]},
+options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{title:{display:true,text:'Bets per Band'}},y:{ticks:{callback:v=>v.toFixed(1)+'%'}}}}});
+<\/script></body></html>`;
+fs.writeFileSync(path.join(OUT, 'rtp-convergence.html'), chartHTML);
 
-const theoretical = ${(THEORETICAL_RTP * 100).toFixed(6)};
-const nTargets = ${PASS1_TARGETS.length};
-const labels = data.map(d => {
-  const m = d.x / 1e6;
-  return m >= 1 ? m.toFixed(0) + 'M' : (d.x / 1e3).toFixed(0) + 'K';
-});
-
-const ctx = document.getElementById('chart').getContext('2d');
-new Chart(ctx, {
-  type: 'line',
-  data: {
-    labels,
-    datasets: [
-      {
-        label: 'Upper band',
-        data: data.map(d => d.y + d.sd * 2),
-        borderColor: 'transparent',
-        backgroundColor: 'rgba(229,115,115,0.08)',
-        fill: '+1',
-        pointRadius: 0,
-        tension: 0.3,
-      },
-      {
-        label: 'Lower band',
-        data: data.map(d => d.y - d.sd * 2),
-        borderColor: 'transparent',
-        backgroundColor: 'rgba(229,115,115,0.08)',
-        fill: false,
-        pointRadius: 0,
-        tension: 0.3,
-      },
-      {
-        label: '+2 SE',
-        data: data.map(d => d.y + d.sd),
-        borderColor: 'rgba(229,115,115,0.4)',
-        borderWidth: 1,
-        fill: false,
-        pointRadius: 0,
-        tension: 0.3,
-      },
-      {
-        label: '-2 SE',
-        data: data.map(d => d.y - d.sd),
-        borderColor: 'rgba(229,115,115,0.4)',
-        borderWidth: 1,
-        fill: false,
-        pointRadius: 0,
-        tension: 0.3,
-      },
-      {
-        label: 'Theoretical (' + theoretical.toFixed(1) + '%)',
-        data: data.map(() => theoretical),
-        borderColor: '#e57373',
-        borderWidth: 2,
-        borderDash: [8, 4],
-        fill: false,
-        pointRadius: 0,
-      },
-      {
-        label: 'Mean RTP',
-        data: data.map(d => d.y),
-        borderColor: '#1565c0',
-        borderWidth: 2.5,
-        fill: false,
-        pointRadius: 3,
-        pointHoverRadius: 6,
-        pointBackgroundColor: '#1565c0',
-        pointHoverBackgroundColor: '#1565c0',
-        tension: 0.3,
-      },
-      {
-        label: 'Final',
-        data: data.map((d, i) => i === data.length - 1 ? d.y : null),
-        borderColor: '#1565c0',
-        backgroundColor: '#1565c0',
-        pointRadius: 6,
-        pointHoverRadius: 8,
-        showLine: false,
-      },
-    ],
-  },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: { mode: 'index', intersect: false },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          title: (items) => labels[items[0].dataIndex] + ' rounds/target \u2014 mean of ' + nTargets + ' targets',
-          label: (item) => {
-            if (item.datasetIndex === 5) return 'Mean RTP: ' + item.parsed.y.toFixed(4) + '%';
-            if (item.datasetIndex === 4) return 'Theoretical: ' + theoretical.toFixed(4) + '%';
-            if (item.datasetIndex <= 1) return '\\u00b12 SE: ' + data[item.dataIndex].sd.toFixed(4) + '%';
-            return null;
-          },
-        },
-      },
-    },
-    scales: {
-      x: {
-        title: { display: true, text: 'Rounds per Target (${PASS1_SEEDS} seeds \u00d7 N rounds)', font: { size: 12 } },
-        ticks: { maxTicksLimit: 10 },
-      },
-      y: {
-        title: { display: false },
-        ticks: { callback: v => v.toFixed(1) + '%' },
-      },
-    },
-  },
-});
-<\/script>
-</body>
-</html>`;
-
-fs.writeFileSync(path.join(outDir, 'rtp-convergence.html'), chartHTML);
-
-console.log('\nOutputs:');
-console.log('  outputs/simulation-results.json');
-console.log('  outputs/rtp-convergence.html');
+console.log(`\nOutputs written to: ${PF_EMIT ? 'outputs' : 'outputs/run'}/simulation-results.json`);
+console.log(`Outputs written to: ${PF_EMIT ? 'outputs' : 'outputs/run'}/rtp-convergence.html`);
+export {};

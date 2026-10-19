@@ -1,0 +1,557 @@
+[
+  {
+    "name": "M01 revealed server seed corrupted mid-phase",
+    "step": 1,
+    "runner": "verify",
+    "expect": "[FAIL] Step 1",
+    "guard": "Step 1 hashes every revealed server seed to the previous epoch's published commitment. A revealed seed that does not hash to its commitment is the whole failure mode commit-reveal exists to detect.",
+    "file": "tests/verify.ts",
+    "find": "const seedMap = buildSeedMap(ds.seeds);",
+    "replace": "ds.seeds[20].seed.serverSeed = '00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff'; // MUTATION: revealed seed no longer hashes to its commitment\nconst seedMap = buildSeedMap(ds.seeds);"
+  },
+  {
+    "name": "M02 forward commitment link broken",
+    "step": 2,
+    "runner": "verify",
+    "expect": "[FAIL] Step 2",
+    "guard": "Step 2 requires seeds[i].nextServerSeedHash === seeds[i+1].serverSeedHashed for every rotation, so the records chain in one epoch order, not just one membership (a consistency check; that each commitment was shown before its bets rests on the capture's pre-bet observations). A forward link that does not match means the operator could have chosen the next seed after observing play.",
+    "file": "tests/verify.ts",
+    "find": "const seedMap = buildSeedMap(ds.seeds);",
+    "replace": "ds.seeds[30].seed.nextServerSeedHash = '0000000000000000000000000000000000000000000000000000000000000000'; // MUTATION: forward chain broken at link 30->31\nconst seedMap = buildSeedMap(ds.seeds);"
+  },
+  {
+    "name": "M03 commitment swapped in the middle of an epoch",
+    "step": 3,
+    "runner": "verify",
+    "expect": "[FAIL] Step 3",
+    "guard": "Step 3 delimits an epoch by the nonce returning to 0 in capture order, NOT by the hash under test, so a hash swapped mid-epoch puts two commitments inside one run. The old check grouped by the hash itself and was an identity that no mutation could break.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets[10].response.server_seed_hashed = bets[60].response.server_seed_hashed; // MUTATION: a foreign commitment inside epoch 0's run\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M04 nonce out of sequence inside an epoch",
+    "step": 4,
+    "runner": "verify",
+    "expect": "[FAIL] Step 4",
+    "guard": "Step 4 requires each epoch's nonces to be 0..49 in order. A gap that is not the single declared capture-retry pattern (nonce 50 present, exactly one of 0..49 missing) is a round the operator served that the capture cannot account for — an operator-origin HARD FAIL, not a capture-origin FLAG.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets[3].response.nonce = 42; // MUTATION: nonce stream broken, no accompanying nonce 50\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M05 result altered on a captured bet",
+    "step": 5,
+    "runner": "verify",
+    "expect": "[FAIL] Step 5",
+    "guard": "Step 5 recomputes every roll from (server seed, client seed, nonce) by exact integer equality on the 0..10000 lattice. An outcome the algorithm does not produce is the whole failure mode a provably-fair audit exists to detect.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets[0].response.result = (bets[0].response.result + 1) % 10001; // MUTATION: roll does not match the seed\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M05b recomputation coverage falls short of the audited population",
+    "step": 5,
+    "runner": "verify",
+    "expect": "[FAIL] Step 5",
+    "guard": "Step 5 now asserts (DICE-07 coverage) that the number of bets recomputed equals the audited population expectedBets, so a bet the capture cannot recompute — its server seed unrevealed, hence absent from the seed map — is a FAIL of THIS step, not a silent exclusion. Dropping one epoch's revealed seed from the map leaves its 50 bets un-recomputable with ZERO mismatches, so only the coverage guard (recomputed 6650 != 6700) can catch it; the older mismatch-only check passed over the shortfall.",
+    "file": "tests/verify.ts",
+    "find": "const seedMap = buildSeedMap(ds.seeds);",
+    "replace": "const seedMap = buildSeedMap(ds.seeds); seedMap.delete([...seedMap.keys()][0]); // MUTATION: one epoch's revealed seed dropped — its 50 bets cannot be recomputed"
+  },
+  {
+    "name": "M05c operator Verify-tab file logic changed and re-pinned",
+    "step": 5,
+    "runner": "verify",
+    "expect": "OPERATOR VERIFY-TAB CODE PARITY",
+    "guard": "Forged evidence: Duel's own vendored Dice Verify-tab code is changed (the roll is read from the digest's second word) AND its SHA-256 pin re-computed, so the hash check accepts it; executing it on every bet and comparing with the served roll and src/rng.ts must expose it (DICE-09).",
+    "edits": [
+      {
+        "file": "evidence/verify-tab/duel-verify-tab-dice-2026-09-25.js",
+        "find": "let offset = 0;",
+        "replace": "let offset = 8;"
+      }
+    ],
+    "repin": [
+      {
+        "file": "src/operator-verifier.ts",
+        "find": "38b257c67d7a342754a201a4cf5220198807c9c1fffe0739b47f099e65950a5b",
+        "hashOf": "evidence/verify-tab/duel-verify-tab-dice-2026-09-25.js"
+      }
+    ]
+  },
+  {
+    "name": "M05d operator Verify-tab file byte changed without re-pin",
+    "step": 5,
+    "runner": "verify",
+    "expect": "operator Verify-tab code or its runner does not match its pinned SHA-256",
+    "guard": "The vendored operator file must hash to its pin before it runs (DICE-09).",
+    "file": "evidence/verify-tab/duel-verify-tab-dice-2026-09-25.js",
+    "find": "// Code written in javascript",
+    "replace": "// Code written in JavaScript"
+  },
+  {
+    "name": "M05e src/rng.ts cites an operator line that does not carry the quoted text",
+    "step": 5,
+    "runner": "verify",
+    "expect": "src/rng.ts operator citations",
+    "guard": "Every citation in src/rng.ts OPERATOR_SOURCE_CITES must quote the pinned operator file at the line it names (DICE-09).",
+    "file": "src/rng.ts",
+    "find": "{ line: 65, text: 'if (value < MAX_FAIR) {'",
+    "replace": "{ line: 64, text: 'if (value < MAX_FAIR) {'"
+  },
+  {
+    "name": "M05f docs-site derive.js logic changed and re-pinned",
+    "step": 5,
+    "runner": "verify",
+    "expect": "SITE VERIFIER PARITY (DICE-24)",
+    "guard": "Forged site verifier: the vendored ProvablyFair.org docs-site derive.js is changed (roll shifted by one on the lattice) AND its SHA-256 pin re-computed, so the hash check accepts it; executing it on every bet and comparing its roll with the served roll and src/rng.ts must expose it (DICE-24).",
+    "edits": [
+      {
+        "file": "verifier-parity/games/dice/derive.js",
+        "find": "result = value % RANGE;",
+        "replace": "result = (value + 1) % RANGE;"
+      }
+    ],
+    "repin": [
+      {
+        "file": "src/site-verifier.ts",
+        "find": "213b61b4a6b6b62562c2c53d46ac8e2aac53193d84f86204abc1fa13cdc1779c",
+        "hashOf": "verifier-parity/games/dice/derive.js"
+      }
+    ]
+  },
+  {
+    "name": "M05g docs-site derive.js byte changed without re-pin",
+    "step": 5,
+    "runner": "verify",
+    "expect": "vendored site verifier does not match its pinned SHA-256",
+    "guard": "The vendored docs-site verifier must hash to its pin before it runs (DICE-24): a comment-only edit changes no roll, so only the pin can see it.",
+    "file": "verifier-parity/games/dice/derive.js",
+    "find": " * Dice RNG — port of",
+    "replace": " * Dice RNG - port of"
+  },
+  {
+    "name": "M05h live-site chunk byte changed without re-pin",
+    "step": 5,
+    "runner": "verify",
+    "expect": "vendored live-site verifier does not match its pinned SHA-256",
+    "guard": "The vendored live www.provablyfair.org/verify-bets chunk must hash to its pin before it runs (DICE-24): an error-message edit changes no roll, so only the pin can see it.",
+    "file": "verifier-parity/live-site/chunks/34934e0e762aa37e.js",
+    "find": "Failed to generate unbiased dice value from hash",
+    "replace": "Failed to generate unbiased dice value from HASH"
+  },
+  {
+    "name": "M05i live-site Duel Dice derivation changed and re-pinned",
+    "step": 5,
+    "runner": "verify",
+    "expect": "LIVE-SITE VERIFIER PARITY (DICE-24)",
+    "guard": "Forged live bundle: the Duel Dice method in the vendored page chunk is changed (roll shifted by one) AND the chunk's SHA-256 pin re-computed; executing the site's own code on every bet and comparing its roll with the served roll and src/rng.ts must expose it (DICE-24).",
+    "edits": [
+      {
+        "file": "verifier-parity/live-site/chunks/34934e0e762aa37e.js",
+        "find": "let r=e%ii/100",
+        "replace": "let r=(e+1)%ii/100"
+      }
+    ],
+    "repin": [
+      {
+        "file": "src/live-site-verifier.ts",
+        "find": "9fb319dec0d79f9bf5851ec8e0052b6b2125e603be03d12b78a0fe99eed817d1",
+        "hashOf": "verifier-parity/live-site/chunks/34934e0e762aa37e.js"
+      }
+    ]
+  },
+  {
+    "name": "M05j live-site prints a server-seed hash other than the commitment, re-pinned",
+    "step": 5,
+    "runner": "verify",
+    "expect": "server-seed hash vs served commitment 6700",
+    "guard": "The live page prints serverSeedHash beside the roll; Step 5 requires it to equal the served server_seed_hashed on every bet. The Duel Dice method is changed to hash a different seed (roll untouched) AND the chunk re-pinned, so only the hash comparison can see it (DICE-24).",
+    "edits": [
+      {
+        "file": "verifier-parity/live-site/chunks/34934e0e762aa37e.js",
+        "find": "serverSeedHash:at(t),resultInfo:n}}s+=8}",
+        "replace": "serverSeedHash:at(t+\"00\"),resultInfo:n}}s+=8}"
+      }
+    ],
+    "repin": [
+      {
+        "file": "src/live-site-verifier.ts",
+        "find": "9fb319dec0d79f9bf5851ec8e0052b6b2125e603be03d12b78a0fe99eed817d1",
+        "hashOf": "verifier-parity/live-site/chunks/34934e0e762aa37e.js"
+      }
+    ]
+  },
+  {
+    "name": "M06 wrong client seed no longer distinguished",
+    "step": 6,
+    "runner": "verify",
+    "expect": "[FAIL] Step 6",
+    "guard": "Step 6 replaces the client seed with a wrong one and requires the roll to change — 0% change would mean the client seed is not reaching the HMAC. This mutation makes the 'wrong' recomputation use the REAL client seed, so nothing changes: an implementation that ignored the client seed would look exactly like this, and Step 6 is the only thing that would notice.",
+    "file": "tests/steps/determinism.ts",
+    "find": "const wrong   = computeResultFromBuffer(key, WRONG_CLIENT, b.response.nonce);",
+    "replace": "const wrong   = computeResultFromBuffer(key, b.response.client_seed, b.response.nonce); // MUTATION: client seed not actually varied"
+  },
+  {
+    "name": "M06b empty-seed control neutered",
+    "step": 6,
+    "runner": "verify",
+    "expect": "[FAIL] Step 6",
+    "guard": "Step 6's EMPTY-SEED CONTROL recomputes every bet with clientSeed = \"\" and holds the collisions to the lattice rate (sum of 1/10001 + 5 sigma + 1). An implementation that drops or defaults the client seed would reproduce every roll under the empty seed. This mutation makes the 'empty' recomputation use the REAL client seed, so all 6,700 collide — far above the bound — and only the empty-seed half of Step 6 can see it (the wrong-seed sample is untouched).",
+    "file": "tests/steps/determinism.ts",
+    "find": "const empty   = computeResultFromBuffer(key, '', b.response.nonce);",
+    "replace": "const empty   = computeResultFromBuffer(key, b.response.client_seed, b.response.nonce); // MUTATION: empty seed not actually empty"
+  },
+  {
+    "name": "M07 win amount does not equal stake x multiplier",
+    "step": 7,
+    "runner": "verify",
+    "expect": "[FAIL] Step 7",
+    "guard": "Step 7 requires payout = amount x multiplier for every win and 0 for every loss. A win credited an amount the formula does not produce is a settlement error.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets.filter(b => b.response.is_win)[0]!.response.amount_won = '1.23456789'; // MUTATION: payout off the formula\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M07b Phase C bet-size-invariance coverage removed",
+    "step": 7,
+    "runner": "verify",
+    "expect": "[FAIL] Step 7",
+    "guard": "Step 7 now carries an ISOLATED bet-size-invariance assertion (DICE-12): every Phase C elevated-stake bet must recompute to its recorded roll AND the engine must take no wager argument, under a coverage guard that a pass over an empty Phase C cannot occur. Emptying ctx.phaseC removes the elevated-stake population the assertion exists to check — 'absent implies pass' is its own defect class — and only Step 7 reads ctx.phaseC, so this isolates the invariance guard from Step 5's whole-dataset recomputation.",
+    "file": "tests/verify.ts",
+    "find": "const phaseC = bets.filter(b => b.phase === 'C');",
+    "replace": "const phaseC = bets.filter(b => b.phase === 'C').slice(0, 0); // MUTATION: Phase C elevated-stake population removed from the invariance check"
+  },
+  {
+    "name": "M07c win credited ONE 1e-18 unit off the settlement rule",
+    "step": 7,
+    "runner": "verify",
+    "expect": "[FAIL] Step 7",
+    "guard": "Step 7 compares every served money string EXACTLY on the 1e-18 grid. The former relative 1e-12 tolerance (floored to absolute 1e-12 below 1) forgave up to 10^6 grid units; this mutation moves one winning credit by a single unit — the smallest change the served format can express — and the exact comparison must reject it.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "{ const w = bets.find(b => b.response.is_win && /\\.\\d{18}$/.test(b.response.amount_won))!; w.response.amount_won = ((x: string) => { const u = BigInt(x.replace('.', '')) + 1n; const t = u.toString().padStart(19, '0'); return t.slice(0, -18) + '.' + t.slice(-18); })(w.response.amount_won); } // MUTATION: one win nudged by one 1e-18 unit\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M07d elevated-stake bet priced differently from the base stake at the same target",
+    "step": 7,
+    "runner": "verify",
+    "expect": "[FAIL] Step 7",
+    "guard": "Step 7 now asserts DICE-12's 'same rule as its base-stake config': Phase C ($10) and the base-stake bets at the same target 9,700 must be served one multiplier value. This mutation moves one LOSING Phase C bet's multiplier by one 1e-18 unit, so no payout conjunct is involved and only the stake-price comparison in Step 7 decides it. Step 9 dies too — the price is fixed by the formula, so a stake-dependent price is also off the formula — which is expected, not a lack of isolation.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "{ const c = bets.find(b => b.phase === 'C' && !b.response.is_win)!; c.response.multiplier = ((x: string) => { const u = BigInt(x.replace('.', '')) + 1n; const t = u.toString().padStart(19, '0'); return t.slice(0, -18) + '.' + t.slice(-18); })(c.response.multiplier); } // MUTATION: Phase C priced off the base stake\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M08 win flag contradicts the recomputed roll",
+    "step": 8,
+    "runner": "verify",
+    "expect": "[FAIL] Step 8",
+    "guard": "Step 8 requires the recorded is_win to equal the declared rule (result > target) for every bet. A win flag that contradicts the roll would let a losing roll settle as a win.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets[2].response.is_win = !bets[2].response.is_win; // MUTATION: win flag contradicts result > target\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M08b roll outside the declared outcome range",
+    "step": 8,
+    "runner": "verify",
+    "expect": "[FAIL] Step 8",
+    "guard": "Step 8 now asserts DICE-10's second conjunct: every recorded roll is an integer inside the declared outcome range [0, 10000]. Setting a LOSING bet's result to -1 keeps the win flag consistent (a negative roll still loses, so condError stays 0) but is below the lattice floor, so the range guard is the reason Step 8 fails. The roll also fails Step 5's recomputation — defence in depth; the [FAIL] Step 8 marker confirms the range guard fired.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets.find(b => !b.response.is_win)!.response.result = -1; // MUTATION: roll below the declared outcome range floor\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M08c roll ceiling no longer witnessed by the census",
+    "step": 8,
+    "runner": "verify",
+    "expect": "[FAIL] Step 8",
+    "guard": "Step 8 now witnesses the roll ceiling (RANGE-1 = 10,000) empirically: the pinned 2,000,000-draw uniformity census must span exactly [0, 10000], since no live bet reached the ceiling (max observed 9,998). Doctoring the census rollMax to 9,998 removes the ceiling witness — the full lattice including the top residue is no longer observed — so the DICE-17 ceiling conjunct fails. 9,998 is a legal roll so Step 12's value domain accepts it; only Step 8's ceiling witness catches it, isolating the DICE-17 empirical-ceiling guard.",
+    "file": "outputs/simulation-results.json",
+    "find": "\"rollMax\": 10000",
+    "replace": "\"rollMax\": 9998"
+  },
+  {
+    "name": "M09 payout multiplier off the declared formula",
+    "step": 9,
+    "runner": "verify",
+    "expect": "[FAIL] Step 9",
+    "guard": "Step 9 requires the served multiplier to equal 0.999 / ((10000 - target) / 10001) for every bet. A multiplier off the formula is either the wrong edge or an operator-supplied number.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets[0].response.multiplier = '999.99'; // MUTATION: multiplier off the declared formula\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M09b multiplier ONE 1e-18 unit off the declared formula",
+    "step": 9,
+    "runner": "verify",
+    "expect": "[FAIL] Step 9",
+    "guard": "Step 9 compares the served 18-dp multiplier to the nearest 1e-18 unit of 999*10001/(1000*(10000-target)) by integer equality. The former abs 1e-6 on a parsed double forgave 10^12 grid units. bets[0] is a LOSS, so no payout conjunct reads its multiplier and only Step 9 decides this one-unit shave.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets[0].response.multiplier = ((x: string) => { const u = BigInt(x.replace('.', '')) + 1n; const t = u.toString().padStart(19, '0'); return t.slice(0, -18) + '.' + t.slice(-18); })(bets[0].response.multiplier); // MUTATION: multiplier one 1e-18 unit off\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M10 win chance off the declared formula",
+    "step": 10,
+    "runner": "verify",
+    "expect": "[FAIL] Step 10",
+    "guard": "Step 10 requires the served win_chance to equal (10000 - target) / 10001 to 14 decimal places. The win_chance field feeds no other step, so this mutation is isolated to Step 10.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets[0].response.win_chance = '0.5'; // MUTATION: win_chance off the declared formula\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M11 bet relabelled to shift the phase counts",
+    "step": 11,
+    "runner": "verify",
+    "expect": "[FAIL] Step 11",
+    "guard": "Step 11 compares the per-phase bet and seed counts, and the last-bet phase, against the code constants in src/loader.ts rather than the dataset header. Relabelling a bet's phase moves it off the declared plan.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets[6699].phase = 'A'; // MUTATION: last bet relabelled A -> phase D count and last-phase both wrong\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M12a dataset altered with the pre-flight abort intact",
+    "step": 12,
+    "runner": "verify",
+    "expect": "MISMATCH ✗ — abort",
+    "guard": "The dataset of record is pinned by content and the verifier refuses to score anything else, before any step runs.",
+    "file": "data/dice-master-6700bets.json",
+    "find": "\"schema\": \"duel-dice-capture-v3\"",
+    "replace": "\"schema\": \"duel-dice-capture-v4\""
+  },
+  {
+    "name": "M12b dataset altered and the pre-flight abort disabled",
+    "step": 12,
+    "runner": "verify",
+    "expect": "[FAIL] Step 12",
+    "guard": "Step 12 re-asserts the dataset hash against the pin in src/loader.ts. With the pre-flight guard switched off, a scored step that cannot fail is the only thing between a doctored dataset and a Full Pass — so the step does its own comparison and fails.",
+    "edits": [
+      {
+        "file": "data/dice-master-6700bets.json",
+        "find": "\"schema\": \"duel-dice-capture-v3\"",
+        "replace": "\"schema\": \"duel-dice-capture-v4\""
+      },
+      {
+        "file": "tests/verify.ts",
+        "find": "if (!hashCheck.match) { process.exit(1); }",
+        "replace": "if (false) { process.exit(1); } // MUTATION: pre-flight dataset abort disabled"
+      }
+    ]
+  },
+  {
+    "name": "M12c impossible scalar in a committed statistical artifact",
+    "step": 12,
+    "runner": "verify",
+    "expect": "[FAIL] Step 12",
+    "guard": "Step 12 validates every numeric leaf of the committed artifacts of record against a value domain derived from src/ (never from the artifact). The SHA-256 pin cannot catch a doctored scalar that is re-pinned in the same commit; the domain check can. A mean RTP of -5% is physically impossible (a payout average cannot be negative). Step 16 also re-derives meanRtp from the win counts (defence in depth), but the [FAIL] Step 12 marker confirms the value-domain guard fired.",
+    "file": "outputs/simulation-results.json",
+    "find": "\"meanRtp\": 99.76095127742617",
+    "replace": "\"meanRtp\": -5"
+  },
+  {
+    "name": "M12d pinned artifact bytes changed with every value intact",
+    "step": 12,
+    "runner": "verify",
+    "expect": "[FAIL] Step 12",
+    "guard": "Step 12 now hashes the artifacts of record against src/artifact-pins.ts. This mutation changes only whitespace in the committed determinism-log.json — every value and every value domain is untouched, so the domain check and the reproduction gate cannot see it — and only the byte pin can.",
+    "file": "outputs/determinism-log.json",
+    "find": "\"verified\": 6700",
+    "replace": "\"verified\":  6700"
+  },
+  {
+    "name": "M13 house edge forged in the multiplier formula",
+    "step": 13,
+    "runner": "verify",
+    "expect": "[FAIL] Step 13",
+    "guard": "Step 13 proves RTP = win_chance x multiplier = 0.999 from first principles across all 9,999 targets, independent of any operator field. Forging the edge factor breaks the identity — the anti-circularity guard that a config-supplied RTP would slip past.",
+    "file": "src/rng.ts",
+    "find": "return 0.999 / theoreticalWinChance(target);",
+    "replace": "return 0.998 / theoreticalWinChance(target); // MUTATION: house edge forged 0.1% -> 0.2%"
+  },
+  {
+    "name": "M13b anti-circularity negative control neutered",
+    "step": 13,
+    "runner": "verify",
+    "expect": "[FAIL] Step 13",
+    "guard": "Step 13's injected-corruption negative control proves the anti-circularity check is falsifiable: it recomputes a true roll, corrupts it, and requires the exact-equality predicate Step 5 uses to REJECT the corrupted roll. Making the 'corrupted' roll equal the true roll removes the injection, so the predicate rejects nothing and the negative control can no longer fail — a vacuous PASS. Step 13 must catch that its own control has been defeated.",
+    "file": "tests/steps/dataset.ts",
+    "find": "const corrupted = (trueRoll + 1) % RANGE;",
+    "replace": "const corrupted = trueRoll; // MUTATION: negative control neutered — nothing is actually corrupted"
+  },
+  {
+    "name": "M13c lattice-enumeration anchor mis-wired",
+    "step": 13,
+    "runner": "verify",
+    "expect": "[FAIL] Step 13",
+    "guard": "Step 13 derives the win probability from the lattice by tallying every roll r with r > target over the 0..10000 grid and cross-checking that count against the closed-form win chance — an independent anchor that cannot share a scaling or off-by-one bug with the closed form. Widening the tally's win rule to r >= target counts one extra outcome per target, so the tally disagrees with the closed form on every served target and the enumeration cross-check fails. This proves the anchor is load-bearing, not decorative.",
+    "file": "tests/steps/dataset.ts",
+    "find": "if (d > target) c++;   // win rule: roll > target",
+    "replace": "if (d >= target) c++;   // MUTATION: win rule widened, tally no longer matches the closed form"
+  },
+  {
+    "name": "M14 an epoch broken off the declared size",
+    "step": 14,
+    "runner": "verify",
+    "expect": "[FAIL] Step 14",
+    "guard": "Step 14 pins the epoch COUNT (134) and the exact epoch SIZE (50) against src/loader.ts. Reassigning one bet's commitment to a brand-new hash creates a 135th epoch of size 1 and shrinks another to 49 — a capture with a different epoch structure than the plan.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets[10].response.server_seed_hashed = 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'; // MUTATION: bet split into a phantom epoch\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M15 Phase D collapsed to a single client seed",
+    "step": 15,
+    "runner": "verify",
+    "expect": "[FLAG] Step 15",
+    "guard": "Step 15 requires >= 2 distinct player-set client seeds in Phase D and that every Phase D bet recomputes. Collapsing Phase D to one client seed removes the evidence that a player-chosen seed reaches the outcome — an operator-origin FLAG that downgrades the verdict.",
+    "file": "tests/verify.ts",
+    "find": "const phaseD = bets.filter(b => b.phase === 'D');",
+    "replace": "const phaseD = bets.filter(b => b.phase === 'D'); phaseD.forEach(b => { b.response.client_seed = 'COLLAPSED_ONE_SEED'; }); // MUTATION: Phase D client-seed variation removed"
+  },
+  {
+    "name": "M16 uniformity chi-squared forged to a perfect fit",
+    "step": 16,
+    "runner": "verify",
+    "expect": "[FAIL] Step 16",
+    "guard": "Step 16 RE-DERIVES the uniformity chi-squared from the committed 100-bin histogram and requires the stored chi2 to BE the re-derived value — it never trusts the artifact's own scalar. Forging the stored chi2 to a perfect 0 (a fit too good to be a 2,000,000-draw sample) disagrees with the histogram the verifier re-sums, so the re-derivation catches it. This proves the DICE-20 'statistics re-derived from rows, never trusted from scalars' requirement is load-bearing.",
+    "file": "outputs/simulation-results.json",
+    "find": "\"chi2\": 99.15140000000005",
+    "replace": "\"chi2\": 0"
+  },
+  {
+    "name": "M16r the stored lag-1 z moved by 5e-12, just beyond the reproduction bound",
+    "step": 16,
+    "runner": "verify",
+    "expect": "[FAIL] Step 16",
+    "guard": "Step 16 compares each re-derived float (chi2, runs z, lag-1 z) to the stored value at 1e-14 absolute + 1e-12 relative (src/diff.ts numbersAgree, the reproduction rule), not bit equality, so 1-ulp libm drift across platforms passes; a stored lag1Z moved by 5e-12 (bound 2.65e-12 at z = 2.64) must still FAIL. |lag1Z| stays far inside zCrit, so only the re-derivation can catch it.",
+    "file": "outputs/simulation-results.json",
+    "find": "\"lag1Z\": 2.642522560852665,",
+    "replace": "\"lag1Z\": 2.642522560857665,"
+  },
+  {
+    "name": "M17 per-epoch served-band return forged in the artifact",
+    "step": 17,
+    "runner": "verify",
+    "expect": "[FAIL] Step 17",
+    "guard": "Step 17 RE-DERIVES every epoch's early-window served-band return from the dataset's own revealed seed (134 x 10,000 HMACs) and compares it to the stored census at the reproduction bound (1e-14 abs + 1e-12 rel) — it never trusts the stored return. Forging one epoch's earlyReturn makes the stored value disagree with the re-derivation, which the step catches. This proves the DICE-21 'every window re-derived in verify' requirement is load-bearing, not decorative.",
+    "file": "outputs/simulation-results.json",
+    "find": "\"earlyReturn\": 47.69082161207113",
+    "replace": "\"earlyReturn\": 5"
+  },
+  {
+    "name": "M18 a bet target driven out of the declared range",
+    "step": 18,
+    "runner": "verify",
+    "expect": "[FAIL] Step 18",
+    "guard": "Step 18 measures the span of the target space and holds every bet's target inside the declared 1..9999 range. A target outside the range is a configuration the game does not offer.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets[0].request.target = 20000; // MUTATION: target outside the declared 1..9999 range\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M18b elevated stake level drops below the coverage floor",
+    "step": 18,
+    "runner": "verify",
+    "expect": "[FAIL] Step 18",
+    "guard": "Step 18 now asserts DICE-15 stake-level coverage: each declared level ($0.01 base, $10 elevated) must carry at least MIN_BETS_PER_STAKE_TIER bets. Relabelling the LOSING Phase C bets down to the base stake leaves the $10 level at only its ~5 winning bets (below the 100-bet floor) while keeping Step 7 green — a loss settles to 0 regardless of stake — so only the stake-level guard fires.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets.forEach(b => { if (b.phase === 'C' && !b.response.is_win) b.request.amount = '0.01'; }); // MUTATION: elevated stake level gutted below the coverage floor\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M18c undeclared direction mode present in the capture",
+    "step": 18,
+    "runner": "verify",
+    "expect": "[FAIL] Step 18",
+    "guard": "Step 18 asserts the observed bet_type set equals the declared direction-mode set {over} exactly. Duel's whole verifier — the win rule, the lattice enumeration, the multiplier formula — is written for the over rule, so an 'under' bet would be scored wrong; the coverage guard makes an undeclared mode a FAIL. Flipping one bet's bet_type to 'under' introduces a mode the verifier is not written for, and only the direction-mode guard catches it (no other step reads request.bet_type).",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets[0].request.bet_type = 'under'; // MUTATION: undeclared direction mode injected\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M19 rejection window no longer a whole number of ranges",
+    "step": 19,
+    "runner": "verify",
+    "expect": "[FAIL] Step 19",
+    "guard": "Step 19 requires MAX_FAIR to be a whole number of ranges, so the accepted uint32 window divides evenly across the 10,001 residues and the modulo bias is 0. Dropping the rejection correction (MAX_FAIR = MAX_U32) leaves a remainder of 7842 residues over-represented — a lean the recomputation steps would never notice because almost every roll still reproduces.",
+    "file": "src/rng.ts",
+    "find": "export const MAX_FAIR = MAX_U32 - (MAX_U32 % RANGE);",
+    "replace": "export const MAX_FAIR = MAX_U32; // MUTATION: rejection correction removed, window no longer a whole number of ranges"
+  },
+  {
+    "name": "M20 quoted multiplier outside the declared odds band",
+    "step": 20,
+    "runner": "verify",
+    "expect": "[FLAG] Step 20",
+    "guard": "Step 20 checks every quoted (operator-served) multiplier against the declared odds band [MIN_ODDS, MAX_ODDS], derived in src/loader.ts from the valid target band and the formula, never from the data. A quoted multiplier of 99999 is above MAX_ODDS (9990.999) — a target outside the game's valid domain. DICE-14 is FLAG policy, so Step 20 discloses it as a FLAG (the off-formula value also hard-fails Step 9's exact-formula check, which is the intended defence in depth; the marker requirement confirms Step 20's bounds guard is what fired).",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets[0].response.multiplier = '99999.0'; // MUTATION: quoted multiplier above the declared MAX_ODDS\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "M21 captured rolls ordered — live-sample serial independence destroyed",
+    "step": 21,
+    "runner": "verify",
+    "expect": "[INFO] Step 21",
+    "guard": "Step 21 (live-sample fit, DICE-22) is informational and verdict-light, so it can never HARD-FAIL — but it is still falsifiable: its lag-1 and runs statistics REACT to the captured sample. Sorting the bets by roll makes the draw stream monotonic, so the lag-1 autocorrelation ~ +1 (z ~ 82) and the runs test collapses, and Step 21 prints [INFO] (informational: not counted, verdict unchanged — profile policy INFORMATIONAL, adopted 2026-09-29). The run also exits non-zero (sorting breaks Step 3's capture-order epoch delimiter), which is the mutation battery's kill condition for a verdict-light step (the exact HouseBets Steps 11 & 13 mechanism). This proves Step 21 is not a vacuous always-PASS.",
+    "file": "tests/verify.ts",
+    "find": "const byHash = groupByHash(bets);",
+    "replace": "bets.sort((a, b) => a.response.result - b.response.result); // MUTATION: capture order destroyed — live-sample serial independence gone\nconst byHash = groupByHash(bets);"
+  },
+  {
+    "name": "MC3a one setting misses its stated figure: target 9998 priced 1 % lower in the RTP table's model",
+    "step": 13,
+    "runner": "test",
+    "expect": "VERDICT: RTP FIGURE OVERSTATED",
+    "expectExit": 5,
+    "regen": [
+      "rtp-table",
+      "record"
+    ],
+    "guard": "FIXPASS2 class C3(i), 14 Oct 2026: a miss on ONE setting must end RTP FIGURE OVERSTATED, exit 5, never exit 1 or 2. The table's per-setting model (src/rtp-settings.ts computeRtpClaim, P(win) × the exact settled multiplier) prices target 9998 at 0.99 × its real value (98.901 %, 0.999 pp under the flat 99.9 % claim, beyond the 0.1 pp band); no captured bet is at target 9998. The table and the record are regenerated in the copy (regen), so the run is consistent and the only thing wrong is the miss. Runner test = mocha then verify, as npm test runs them: no unit test, label check, simulation check or operator-FLAG branch may end the run first (exit 1 or 2); Step 13 carries DICE-19 and becomes the FLAG.",
+    "file": "src/rtp-settings.ts",
+    "find": "    acc.add(`target=${t} over`, wins * EDGE_NUM * R, R * EDGE_DEN * wins);",
+    "replace": "    acc.add(`target=${t} over`, (t === 9998 ? 99n : 100n) * wins * EDGE_NUM * R, 100n * R * EDGE_DEN * wins); // MUTATION: one setting 1 % under its real RTP"
+  },
+  {
+    "name": "MC3as the same change as MC3a, RTP table NOT regenerated: a stale table is a reproduction failure",
+    "step": 13,
+    "runner": "verify",
+    "expect": "DIFFERS from this run",
+    "expectExit": 1,
+    "guard": "Ruling 14 Oct 2026 (FIXPASS2): a committed RTP table that does not equal the run or its pin is a reproduction failure, exit 1, miss or no miss. MC3a without regenerating the table must end exit 1 with the table reported as differing, never exit 5: the miss is only reported on a consistent package.",
+    "file": "src/rtp-settings.ts",
+    "find": "    acc.add(`target=${t} over`, wins * EDGE_NUM * R, R * EDGE_DEN * wins);",
+    "replace": "    acc.add(`target=${t} over`, (t === 9998 ? 99n : 100n) * wins * EDGE_NUM * R, 100n * R * EDGE_DEN * wins); // MUTATION: one setting 1 % under its real RTP"
+  },
+  {
+    "name": "MC3b the stated figure raised in the claim source: 99.9 % -> 100.1 %",
+    "step": 13,
+    "runner": "test",
+    "expect": "VERDICT: RTP FIGURE OVERSTATED",
+    "expectExit": 5,
+    "regen": [
+      "rtp-table",
+      "record"
+    ],
+    "guard": "FIXPASS2 class C3(ii), 14 Oct 2026: the published figure raised where the claim is stated (src/rtp-settings.ts RTP_CLAIM, the fairness page's 0.999) to 1.001, 0.2 pp above every setting's real 99.9 %: all 9,997 settings miss by more than the band, so the run must end RTP FIGURE OVERSTATED, exit 5. Table and record regenerated in the copy. No other check reads the claim, so nothing may end the run at exit 1 or 2 first.",
+    "file": "src/rtp-settings.ts",
+    "find": "  kind: 'flat',\n  rtp: '0.999',",
+    "replace": "  kind: 'flat',\n  rtp: '1.001', // MUTATION: stated figure raised"
+  },
+  {
+    "name": "MC3bs the same change as MC3b, RTP table NOT regenerated: a stale table is a reproduction failure",
+    "step": 13,
+    "runner": "verify",
+    "expect": "DIFFERS from this run",
+    "expectExit": 1,
+    "guard": "Ruling 14 Oct 2026 (FIXPASS2): a committed RTP table that does not equal the run or its pin is a reproduction failure, exit 1, miss or no miss. MC3b without regenerating the table must end exit 1 with the table reported as differing, never exit 5: the miss is only reported on a consistent package.",
+    "file": "src/rtp-settings.ts",
+    "find": "  kind: 'flat',\n  rtp: '0.999',",
+    "replace": "  kind: 'flat',\n  rtp: '1.001', // MUTATION: stated figure raised"
+  }
+]

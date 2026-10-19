@@ -7,5 +7,12 @@ outputs/*.json
 !outputs/rtp-convergence.html
 .browser-profile/
 
+# artifacts of record — the verifier scores a run against these
+!outputs/verification-results.json
+!outputs/determinism-log.json
+!outputs/chi-squared-results.json
+!outputs/simulation-results.json
+
 # run products — this verifier writes them fresh each run; the committed artifacts are pinned
 outputs/run/
+!outputs/rtp-claim-table.json
