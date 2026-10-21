@@ -11,7 +11,7 @@ import { step, VerifyContext } from './context';
 import {
   checkDatasetHash,
   EXPECTED_BETS, EXPECTED_SEEDS, EXPECTED_PHASE_BETS, EXPECTED_SEED_PHASES,
-  EXPECTED_EPOCHS, EXPECTED_EPOCH_SIZE,
+  EXPECTED_EPOCHS, EXPECTED_EPOCH_SIZE, TARGET_MIN, TARGET_MAX,
 } from '../../src/loader';
 import { theoreticalWinChance, theoreticalMultiplier, computeResult, RANGE } from '../../src/rng';
 import { domainRules, validateDomains, describeDomainFailures } from '../../src/domains';
@@ -151,10 +151,10 @@ export function run(ctx: VerifyContext): StepResult[] {
   //  (c) RTP IDENTITY. Retained as a closing consistency statement: RTP = win_chance × multiplier
   //      = 0.999 at every target — necessary but, on its own, algebraically trivial, which is why
   //      it is not the anti-circularity evidence.
-  const totalTargets = 9999;
+  const totalTargets = TARGET_MAX - TARGET_MIN + 1;   // 9,997 legal targets 2..9998 (src/loader.ts)
   let maxDeviation = 0;
   let worstTarget  = 0;
-  for (let t = 1; t <= totalTargets; t++) {
+  for (let t = TARGET_MIN; t <= TARGET_MAX; t++) {
     const wc       = theoreticalWinChance(t);
     const mult     = theoreticalMultiplier(t);
     const rtp      = wc * mult;
@@ -210,12 +210,12 @@ export function run(ctx: VerifyContext): StepResult[] {
         + `literal 10,001-point tally agree on all ${distinctTargets.length} distinct served targets `
         + `(0 mismatches); negative control — a corrupted roll and a NaN are REJECTED by the exact `
         + `predicate Step 5 uses while the true roll is accepted (falsifiable); RTP = win_chance × `
-        + `multiplier = 0.999 within the ${S13_BOUND} bound at all 9,999 targets`
+        + `multiplier = 0.999 within the ${S13_BOUND} bound at all ${totalTargets.toLocaleString('en-US')} legal targets ${TARGET_MIN}..${TARGET_MAX}`
       : !negControlRejects
         ? `NEGATIVE CONTROL VACUOUS: the determinism predicate did not reject a corrupted roll — the anti-circularity check cannot fail and is not evidence`
         : enumMismatches > 0
           ? `WIN-PROBABILITY ANCHOR BROKEN: closed-form win chance disagrees with the lattice tally on ${enumMismatches} of ${distinctTargets.length} served targets (first: ${firstEnumMismatch})`
-          : `RTP identity broken: at least one of the 9,999 targets deviates from 0.999 by more than the ${S13_BOUND} bound (worst: target=${worstTarget}; deviation in this step's data block)`,
+          : `RTP identity broken: at least one of the ${totalTargets.toLocaleString('en-US')} legal targets deviates from 0.999 by more than the ${S13_BOUND} bound (worst: target=${worstTarget}; deviation in this step's data block)`,
     { targetsTested: totalTargets, maxDeviation, bound: S13_BOUND, worstTarget,
       distinctServedTargets: distinctTargets.length, enumMismatches, negControlRejects },
   );

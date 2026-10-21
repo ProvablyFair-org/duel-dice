@@ -91,16 +91,6 @@
     "replace": "// Code written in JavaScript"
   },
   {
-    "name": "M05e src/rng.ts cites an operator line that does not carry the quoted text",
-    "step": 5,
-    "runner": "verify",
-    "expect": "src/rng.ts operator citations",
-    "guard": "Every citation in src/rng.ts OPERATOR_SOURCE_CITES must quote the pinned operator file at the line it names (DICE-09).",
-    "file": "src/rng.ts",
-    "find": "{ line: 65, text: 'if (value < MAX_FAIR) {'",
-    "replace": "{ line: 64, text: 'if (value < MAX_FAIR) {'"
-  },
-  {
     "name": "M05f docs-site derive.js logic changed and re-pinned",
     "step": 5,
     "runner": "verify",
@@ -349,7 +339,7 @@
     "expect": "[FAIL] Step 12",
     "guard": "Step 12 validates every numeric leaf of the committed artifacts of record against a value domain derived from src/ (never from the artifact). The SHA-256 pin cannot catch a doctored scalar that is re-pinned in the same commit; the domain check can. A mean RTP of -5% is physically impossible (a payout average cannot be negative). Step 16 also re-derives meanRtp from the win counts (defence in depth), but the [FAIL] Step 12 marker confirms the value-domain guard fired.",
     "file": "outputs/simulation-results.json",
-    "find": "\"meanRtp\": 99.76095127742617",
+    "find": "\"meanRtp\": 99.76095127742616",
     "replace": "\"meanRtp\": -5"
   },
   {
@@ -367,10 +357,10 @@
     "step": 13,
     "runner": "verify",
     "expect": "[FAIL] Step 13",
-    "guard": "Step 13 proves RTP = win_chance x multiplier = 0.999 from first principles across all 9,999 targets, independent of any operator field. Forging the edge factor breaks the identity — the anti-circularity guard that a config-supplied RTP would slip past.",
+    "guard": "Step 13 proves RTP = win_chance x multiplier = 0.999 from first principles across all 9,997 legal targets, independent of any operator field. Forging the edge factor breaks the identity — the anti-circularity guard that a config-supplied RTP would slip past.",
     "file": "src/rng.ts",
-    "find": "return 0.999 / theoreticalWinChance(target);",
-    "replace": "return 0.998 / theoreticalWinChance(target); // MUTATION: house edge forged 0.1% -> 0.2%"
+    "find": "  return (Number(EDGE_NUM) * RANGE) / (Number(EDGE_DEN) * count);",
+    "replace": "  return (998 * RANGE) / (Number(EDGE_DEN) * count); // MUTATION: house edge forged 0.1% -> 0.2%"
   },
   {
     "name": "M13b anti-circularity negative control neutered",
@@ -447,10 +437,10 @@
     "step": 18,
     "runner": "verify",
     "expect": "[FAIL] Step 18",
-    "guard": "Step 18 measures the span of the target space and holds every bet's target inside the declared 1..9999 range. A target outside the range is a configuration the game does not offer.",
+    "guard": "Step 18 measures the span of the target space and holds every bet's target inside the declared 2..9998 range (src/loader.ts). A target outside the range is a configuration the game does not offer.",
     "file": "tests/verify.ts",
     "find": "const byHash = groupByHash(bets);",
-    "replace": "bets[0].request.target = 20000; // MUTATION: target outside the declared 1..9999 range\nconst byHash = groupByHash(bets);"
+    "replace": "bets[0].request.target = 20000; // MUTATION: target outside the declared 2..9998 range\nconst byHash = groupByHash(bets);"
   },
   {
     "name": "M18b elevated stake level drops below the coverage floor",
@@ -479,8 +469,8 @@
     "expect": "[FAIL] Step 19",
     "guard": "Step 19 requires MAX_FAIR to be a whole number of ranges, so the accepted uint32 window divides evenly across the 10,001 residues and the modulo bias is 0. Dropping the rejection correction (MAX_FAIR = MAX_U32) leaves a remainder of 7842 residues over-represented — a lean the recomputation steps would never notice because almost every roll still reproduces.",
     "file": "src/rng.ts",
-    "find": "export const MAX_FAIR = MAX_U32 - (MAX_U32 % RANGE);",
-    "replace": "export const MAX_FAIR = MAX_U32; // MUTATION: rejection correction removed, window no longer a whole number of ranges"
+    "find": "export const MAX_FAIR: number = Math.floor((MAX_U32 + 1) / RANGE) * RANGE;",
+    "replace": "export const MAX_FAIR: number = MAX_U32; // MUTATION: rejection correction removed, window no longer a whole number of ranges"
   },
   {
     "name": "M20 quoted multiplier outside the declared odds band",
@@ -538,7 +528,7 @@
       "rtp-table",
       "record"
     ],
-    "guard": "FIXPASS2 class C3(ii), 14 Oct 2026: the published figure raised where the claim is stated (src/rtp-settings.ts RTP_CLAIM, the fairness page's 0.999) to 1.001, 0.2 pp above every setting's real 99.9 %: all 9,997 settings miss by more than the band, so the run must end RTP FIGURE OVERSTATED, exit 5. Table and record regenerated in the copy. No other check reads the claim, so nothing may end the run at exit 1 or 2 first.",
+    "guard": "FIXPASS2 class C3(ii), 14 Oct 2026: the published figure raised where the claim is stated (src/rtp-settings.ts RTP_CLAIM, the game settings' 0.999, E14) to 1.001, 0.2 pp above every setting's real 99.9 %: all 9,997 settings miss by more than the band, so the run must end RTP FIGURE OVERSTATED, exit 5. Table and record regenerated in the copy. No other check reads the claim, so nothing may end the run at exit 1 or 2 first.",
     "file": "src/rtp-settings.ts",
     "find": "  kind: 'flat',\n  rtp: '0.999',",
     "replace": "  kind: 'flat',\n  rtp: '1.001', // MUTATION: stated figure raised"

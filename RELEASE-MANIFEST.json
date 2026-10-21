@@ -2,7 +2,7 @@
   "auditId": "PF-2026-DL02",
   "game": "dice",
   "casino": "duel",
-  "release": "v1.1.0",
+  "release": "v1.2.0",
   "framework": "1.1",
   "simulation": {
     "seeding": "pinned",
@@ -25,12 +25,12 @@
   "datasetSha256": "3550ffca07a6f7825f96cdd4e3d8c3cd57898b5b5238b9739753a754cff056d6",
   "artifacts": {
     "data/dice-master-6700bets.json": "3550ffca07a6f7825f96cdd4e3d8c3cd57898b5b5238b9739753a754cff056d6",
-    "outputs/simulation-results.json": "37355e1bdd6948276dc55f33f536a70d6f9aa803fdd03cb63da3d379a26bad66",
+    "outputs/simulation-results.json": "e42f0133a5f049e966dc7464738eab5bd53edafb014e8cf50e9eba684ae6c3cf",
     "outputs/chi-squared-results.json": "5ce2dc93a0e7f74fc3b3ac06af905de25d6e7d9993d8f3752cec0ccccf2ad75c",
     "outputs/determinism-log.json": "966a9955e0beb3afd2bb493812d06aad2f51bb4db991f333c3a9ae010dfc7d53",
     "outputs/rtp-convergence.html": "41958876c2a7630531da3f2fd9e2eb7feccbd893a863fbd049319b00c28b5677",
-    "outputs/verification-results.json": "156387db7d9f84b1239f1abfd0fab93813c44b14b3aaa490199bd15a54b97b4b",
-    "outputs/rtp-claim-table.json": "a69f53df3681ea1b419d18e8fbf044c50bdcfe85a5562d67c8f89e91e400f3c0"
+    "outputs/verification-results.json": "d95eb23604c432950e0f8bfd11fe4e27d63e3a437b090e9be09ac950bdadf281",
+    "outputs/rtp-claim-table.json": "e64b30bd61642193f2ee3d7d1c6f615267c0f3cbd243395e4fd325bd482a4f75"
   },
   "verdict": "PROVABLY FAIR — Full Pass",
   "scored": {
@@ -50,15 +50,15 @@
     "stage": "production",
     "qualifier": null
   },
-  "supersedes": "v1.0.0",
+  "supersedes": "v1.1.0",
   "signature": "SHA256:gEujiJm2pRyq7lQsfYQfQ1r97H/J7GdaKHbOW8GtikY",
   "falsifiability": {
     "registry": "tests/mutations.json",
     "runner": "scripts/mutate.mjs",
-    "mutations": 49,
-    "killed": 49,
+    "mutations": 48,
+    "killed": 48,
     "declaredSurvivors": 0,
-    "source": "npm run mutate 2026-10-14 evening (Apple M2 Max, 12 cores, node v22.23.1), the whole registry (49 entries) in one run (baseline green) on the tree carrying the FIXPASS2 C3 entries: 49/49 killed, 21/21 scored steps covered; 2026-10-15 --only M13, MC3: 7/7 killed, MC3a/MC3b exit 5"
+    "source": "npm run mutate 2026-10-20 (Apple M2 Max, 12 cores, node v22.23.1), the whole registry (48 entries; M05e retired with the src/rng.ts citation table) in one run (baseline green) on the clean-room tree: 48/48 killed, 21/21 scored steps covered"
   },
-  "pending": "supersedes is the latest tag read from ProvablyFair-org/duel-dice on 2026-09-28 (v1.0.0; the hand-written manifest this generator replaces left it null because the tag history had not been read)."
+  "pending": ""
 }

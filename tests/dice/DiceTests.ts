@@ -170,9 +170,10 @@ describe('Payout Formulas', () => {
 
 // ── The operator's own Verify-tab code (profile DICE-09) ──────────────────────
 
-describe('Operator source — Duel\'s own Dice Verify-tab code, executed unmodified (evidence/verify-tab, copied 2026-09-25)', () => {
+describe('Second check — Duel\'s own Dice Verify-tab code, executed unmodified (evidence/verify-tab, copied 2026-09-25)', () => {
+  // Not the source of src/rng.ts: that is rebuilt from docs/ALGORITHM.md. Duel's code is run as a cross-check.
   // duel.com → Provably Fair → Verify (Dice) → Expand → Copy, saved verbatim (src/operator-verifier.ts)
-  const { runOperatorVerifier, checkOperatorCites, rollUnits, OPERATOR_VERIFIER_PINS, OPERATOR_VERIFIER_FILE, OPERATOR_EXPECTED_LOGS } =
+  const { runOperatorVerifier, rollUnits, OPERATOR_VERIFIER_PINS, OPERATOR_VERIFIER_FILE, OPERATOR_EXPECTED_LOGS } =
     require('../../src/operator-verifier') as typeof import('../../src/operator-verifier');
   const { loadDataset, buildSeedMap } = require('../../src/loader') as typeof import('../../src/loader');
   const { RANGE, MAX_FAIR } = require('../../src/rng') as typeof import('../../src/rng');
@@ -191,12 +192,6 @@ describe('Operator source — Duel\'s own Dice Verify-tab code, executed unmodif
     assert.deepStrictEqual(run.logs, [...OPERATOR_EXPECTED_LOGS]);
     assert.strictEqual(run.range, RANGE);
     assert.strictEqual(run.maxFair, MAX_FAIR);
-  });
-
-  it('every operator line src/rng.ts cites carries the quoted text verbatim', () => {
-    const c = checkOperatorCites();
-    assert.deepStrictEqual(c.bad, []);
-    assert.ok(c.checked > 0);
   });
 
   it('fixed vectors: the operator code displays each of the 7 known rolls as units / 100, exactly', () => {

@@ -27,14 +27,14 @@ const DECLARED = {
   auditId: 'PF-2026-DL02',
   game: 'dice',
   casino: 'duel',
-  release: 'v1.1.0',
+  release: 'v1.2.0',
   framework: '1.1',
   environmentHost: 'duel.com',
   environmentStage: 'production',
   environmentQualifier: null,
-  supersedes: 'v1.0.0',
+  supersedes: 'v1.1.0',
   signature: 'SHA256:gEujiJm2pRyq7lQsfYQfQ1r97H/J7GdaKHbOW8GtikY',
-  pending: 'supersedes is the latest tag read from ProvablyFair-org/duel-dice on 2026-09-28 (v1.0.0; the hand-written manifest this generator replaces left it null because the tag history had not been read).',
+  pending: '',
 };
 
 /** How Pass 1 is seeded and attested — described as the package declares it (its src/ and MANIFEST.md). */
@@ -68,7 +68,7 @@ function captureWindow(dataset) {
 /** The falsifiability battery. `mutations` is computed from the registry; the RUN RESULT is DECLARED
  * from the last completed `npm run mutate` (cite it in `source`) and must be refreshed by re-running
  * the battery — a generator never asserts a kill it did not run. null = not run for this manifest. */
-const FALSIFIABILITY_DECLARED = { killed: 49, declaredSurvivors: 0, source: 'npm run mutate 2026-10-14 evening (Apple M2 Max, 12 cores, node v22.23.1), the whole registry (49 entries) in one run (baseline green) on the tree carrying the FIXPASS2 C3 entries: 49/49 killed, 21/21 scored steps covered; 2026-10-15 --only M13, MC3: 7/7 killed, MC3a/MC3b exit 5' };
+const FALSIFIABILITY_DECLARED = { killed: 48, declaredSurvivors: 0, source: 'npm run mutate 2026-10-20 (Apple M2 Max, 12 cores, node v22.23.1), the whole registry (48 entries; M05e retired with the src/rng.ts citation table) in one run (baseline green) on the clean-room tree: 48/48 killed, 21/21 scored steps covered' };
 
 /** How long `npm test` takes, and on what — a property of the machine, so DECLARED from measured runs. */
 const RUNTIME = {

@@ -1,7 +1,7 @@
 /**
  * Step 18: Configuration Coverage — target space, stake levels, direction mode (DICE-15)
  *
- * Dice's primary configuration dimension is `target`, an integer over 1…9999 that sets both the
+ * Dice's primary configuration dimension is `target`, an integer over 2…9998 (src/loader.ts) that sets both the
  * win chance and the multiplier. Every other scored step verifies the FORMULA — win chance,
  * multiplier, payout, the RTP identity — and the formula steps are exhaustive by construction, so
  * they say nothing about whether the live capture actually spanned the dimension. A capture that
@@ -11,7 +11,7 @@
  * profile names, each asserted against a plan pinned in src/loader.ts rather than described in
  * prose:
  *
- *   • TARGET SPACE — divided into ten 1000-wide bands spanning both ends of 1…9999; each band must
+ *   • TARGET SPACE — divided into ten 1000-wide bands spanning both ends of 2…9998; each band must
  *     carry at least MIN_BETS_PER_TARGET_BAND bets, so a band reduced to a token sample fails.
  *   • STAKE LEVELS — both declared stake levels (the $0.01 base and the $10 elevated stake) must
  *     each carry at least MIN_BETS_PER_STAKE_TIER bets. A capture that dropped the elevated level
@@ -27,7 +27,7 @@
  * The step also reports how many distinct targets live play exercised and, for completeness, the
  * share of the theoretical return that sits on the targets it never touched — which is zero in
  * the 0.1 % edge tier, because there the RTP identity is flat at 0.999 across the whole target range
- * and is proven analytically over all 9,999 targets in Step 13. What an unexercised target lacks is a live observation of its
+ * and is proven analytically over all 9,997 legal targets in Step 13. What an unexercised target lacks is a live observation of its
  * multiplier, not a verified return.
  */
 

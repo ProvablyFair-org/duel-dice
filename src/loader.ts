@@ -39,13 +39,16 @@ export const EXPECTED_PHASE_BOUNDARY_SKIPS = 3;
 export const EXPECTED_EPOCHS     = 134;
 export const EXPECTED_EPOCH_SIZE = 50;
 
-// Target is the configuration dimension, valid over 1…9999. Phase A samples it at random,
+// Target is the configuration dimension, valid over 2…9998: the duel.com dice config (E14,
+// scaling_edge) defines an edge only for 2…9998 winning outcomes, and src/rng.ts (rebuilt from
+// docs/ALGORITHM.md §3.3) refuses a multiplier outside those bands. Until v1.2.0 this read 1…9999,
+// which disagreed with the RTP claim table's 2–9998 (src/rtp-settings.ts). Phase A samples it at random,
 // so the coverage question is whether the sampling actually spanned the range: the target
 // space is split into ten 1000-wide bands and each must carry the floor below. The lowest
-// band observed carries 403 bets, so a floor of 350 fails on a band cut to a token sample
+// band observed carries 404 bets (403 under the former 1…9999 bands), so a floor of 350 fails on a band cut to a token sample
 // while leaving the honest capture passing.
-export const TARGET_MIN = 1;
-export const TARGET_MAX = 9999;
+export const TARGET_MIN = 2;
+export const TARGET_MAX = 9998;
 export const TARGET_BANDS = 10;
 export const MIN_BETS_PER_TARGET_BAND = 350;
 
@@ -75,7 +78,7 @@ export const DECLARED_DIRECTION_MODES: readonly string[] = Object.freeze(['over'
 // multiplier outside [MIN_ODDS, MAX_ODDS] would mean a target outside the game's valid domain —
 // disclosed as a FLAG (DICE-14 is FLAG policy). Derived here from the src constants above and the
 // formula in src/rng.ts, never from the dataset, so the bound describes the game rather than the
-// capture. MIN_ODDS ≈ 0.999·10001/9999 ≈ 0.99930; MAX_ODDS = 0.999·10001/1 = 9990.999.
+// capture. MIN_ODDS = 0.999·10001/9998 ≈ 0.99930; MAX_ODDS = 0.999·10001/2 = 4995.4995.
 export const MIN_ODDS = theoreticalMultiplier(TARGET_MIN);
 export const MAX_ODDS = theoreticalMultiplier(TARGET_MAX);
 

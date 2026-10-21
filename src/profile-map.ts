@@ -95,8 +95,10 @@ export const STEP_CLAIMS: Record<number, StepClaims> = {
         + '(derive.js 213b61b4…, hmac-sha256.js bc30bfe9…); Step 5 FAILs unless the copies hash to the pins, then runs the '
         + 'site\'s own deriveDice on every bet — bound to EXPECTED_BETS = 6,700 — and FAILs on any roll that differs from the '
         + 'served roll or src/rng.ts computeResult, any win flag that differs from the served is_win, a win chance not '
-        + 'bit-identical to theoreticalWinChance, or a multiplier not bit-identical to theoreticalMultiplier on a win / not 0 '
-        + 'on a loss. Measured 6,700/6,700, 0 differ on each. Recorded, not scored: the page displays the multiplier with '
+        + 'bit-identical to theoreticalWinChance, or a multiplier more than one ulp from theoreticalMultiplier on a win / not 0 '
+        + 'on a loss. Measured 6,700/6,700, 0 differ on each; on 593 of the 2,519 wins the multiplier is exactly one ulp from '
+        + 'src/rng.ts (derive.js computes 0.999 / winChance, src/rng.ts the correctly rounded 9990999 / (1000 · count); '
+        + 'bit-identical through v1.1.0, when src/rng.ts used derive.js\'s form). Recorded, not scored: the page displays the multiplier with '
         + 'toFixed(4); on 4 wins the served 18-dp multiplier sits exactly on a 4-dp half and on 2 of them (67.50675, 3.64635) '
         + 'the nearest double lies below and the page prints the lower digit — no 4-dp display rule is declared. (2) LIVE '
         + 'SITE: www.provablyfair.org/verify-bets, GET 2026-09-25 — the three chunks the Duel derivation needs (Turbopack '
@@ -199,7 +201,7 @@ export const STEP_CLAIMS: Record<number, StepClaims> = {
         + '(10000 − target)) = 0.999 / ((10000 − target) / 10001), BigInt integer equality on all 6,700 '
         + 'bets (0 mismatches, 0 exact ties). Replaces abs 1e-6 on a parsed double (10^12 grid units). '
         + 'FAIL probed (M09, M09b: multiplier nudged by ONE 1e-18 unit). The edge factor 0.999 is declared '
-        + 'to the published fairness page, and the derivation reads only request.target — no '
+        + 'to Duel\'s game settings (E14: first tier of all 122 ranges at house_edge 0.001), and the derivation reads only request.target — no '
         + 'operator-supplied odds field feeds it. This is the 0.1 % edge tier, which holds every captured '
         + 'bet; Duel\'s scaled tiers are not verified (DL-15)',
     }],
@@ -267,7 +269,7 @@ export const STEP_CLAIMS: Record<number, StepClaims> = {
       {
         id: 'DICE-19', coverage: 'full',
         note: 'the effective edge is derived per target from the lattice and the multiplier formula '
-          + '(1 − RTP = 0.001 exactly at every integer target 1..9999) and equals the declared 0.1 % '
+          + '(1 − RTP = 0.001 exactly at every legal integer target 2..9998) and equals the declared 0.1 % '
           + 'claim, with no per-target deviation to flag',
       },
     ],
@@ -300,7 +302,7 @@ export const STEP_CLAIMS: Record<number, StepClaims> = {
         + '100-bin histogram, two-sided at α_screen; lag-1 and Wald–Wolfowitz runs, the runs z '
         + 're-derived from the stored cell counts; the three screens Bonferroni-corrected to α/3 so '
         + 'the step\'s family-wise level is α) plus edge convergence on ten target bands spanning '
-        + 'both ends of 1..9999 at 1,000,000 bets each, every band\'s RTP re-derived from its stored '
+        + 'both ends of 2..9998 at 1,000,000 bets each, every band\'s RTP re-derived from its stored '
         + 'win count and required within 5·SE of the flat 0.999. The census (histogram, win counts) '
         + 'is a deterministic function of the pinned seeds — byte-reproducible; the derived '
         + 'statistics reproduce within the reproduction tolerance. The one raw statistic is lag-1 '
@@ -329,7 +331,7 @@ export const STEP_CLAIMS: Record<number, StepClaims> = {
       id: 'DICE-15', coverage: 'partial',
       note: 'all three coverage dimensions the profile names are asserted against a plan pinned in '
         + 'src/loader.ts, not described in prose: (1) TARGET SPACE — ten 1000-wide bands each held '
-        + 'to the MIN_BETS_PER_TARGET_BAND floor, covering both ends of 1..9999; (2) STAKE LEVELS — '
+        + 'to the MIN_BETS_PER_TARGET_BAND floor, covering both ends of 2..9998; (2) STAKE LEVELS — '
         + 'both declared stake levels ($0.01 base and $10 elevated) each held to the MIN_BETS_PER_STAKE_TIER '
         + 'floor, with any bet at an undeclared stake counted as a gap; (3) DIRECTION MODE — the '
         + 'declared set DECLARED_DIRECTION_MODES is the AUDITED scope {over}, and the observed bet_type '
@@ -348,7 +350,7 @@ export const STEP_CLAIMS: Record<number, StepClaims> = {
         + 'served and asserted STRICTLY DECREASING in win chance (0 inversions, 0 targets mapping '
         + 'to >1 multiplier); and every quoted multiplier on all 6,700 bets is checked to lie '
         + 'within the declared odds band [MIN_ODDS, MAX_ODDS] derived in src/loader.ts from the '
-        + 'valid target band 1..9999 and the formula (not from the data). FLAG policy: a violation '
+        + 'valid target band 2..9998 and the formula (not from the data). FLAG policy: a violation '
         + 'is disclosed, not failed',
     }],
   },
@@ -401,24 +403,25 @@ export const NOT_APPLICABLE: Array<{ id: string; reason: string }> = [
 export const PACKAGE_CHECKS: Array<{ id: string; artifact: string; coverage: Coverage | 'none'; note: string }> = [
   {
     id: 'DICE-09',
-    artifact: 'tests/dice/DiceTests.ts (Operator source block) + src/rng.ts OPERATOR_SOURCE_CITES + src/operator-verifier.ts + Step 5',
+    artifact: 'docs/ALGORITHM.md + tests/dice/RngSpecTests.ts + tests/dice/DiceTests.ts (Second check block) + src/operator-verifier.ts + Step 5',
     coverage: 'full',
-    note: 'CORRECTED 2026-09-25. This note used to say Duel ships no source, so the citation was to the fairness '
-      + 'page (E03, which shows the code panel collapsed). Duel publishes the Dice code on its Verify tab; the '
-      + 'auditor copied it verbatim on 2026-09-25 (duel.com → Provably Fair → Verify → Expand → Copy) to '
-      + 'evidence/verify-tab/duel-verify-tab-dice-2026-09-25.js (E13, SHA-256 38b257c6…), pinned with its runner in '
-      + 'src/operator-verifier.ts. The asserts, each met: (1) "unit tests reproduce at least one captured bet from its '
-      + 'revealed seed … against the operator\'s published algorithm" — the Operator source block in '
-      + 'tests/dice/DiceTests.ts EXECUTES that file unmodified on all 6,700 captured bets: its validateDiceResult '
-      + 'string ((value % 10001) / 100).toString(), mapped onto the 0..10000 lattice by rollUnits (which rejects any '
-      + 'string that is not exactly String(units / 100)), equals the served roll and src/rng.ts on 6,700/6,700; (2) '
-      + '"fixed vectors" — the same block requires it to print each of the 7 known rolls exactly as units / 100; (3) '
-      + '"the adapter cites the operator source line it ports" — src/rng.ts OPERATOR_SOURCE_CITES names 12 lines '
-      + '(L28 hex-decoded key … L66 value % RANGE, L74 throw) with the text each must carry, and checkOperatorCites '
-      + 'FAILs any that does not: 12/12. Step 5 runs the same execution (plus the file\'s own RANGE / MAX_FAIR against '
-      + 'src/rng.ts) and citation check in the verifier. FAIL probed: M05c (a logic line of the operator file changed '
-      + 'AND re-pinned → disagreement), M05d (a byte changed without re-pin → hash mismatch), M05e (a citation moved '
-      + 'to a line that does not carry its text). Not established: that the Verify button, or Duel\'s server, runs '
+    note: 'REWRITTEN 2026-10-20 (v1.2.0). src/rng.ts is rebuilt from a written specification, docs/ALGORITHM.md '
+      + '(framework games/dice/ALGORITHM.md, commit cc279ef), by an implementer who never opened Duel\'s code; Duel\'s '
+      + 'published Verify-tab code is run as a second check, not used as the source. Through v1.1.0 src/rng.ts was a port '
+      + 'of that code and cited 12 of its lines (OPERATOR_SOURCE_CITES); the port and the citation table are gone. The '
+      + 'asserts: (1) "unit tests reproduce at least one captured bet from its revealed seed … against the operator\'s '
+      + 'published algorithm" — the Second check block in tests/dice/DiceTests.ts EXECUTES Duel\'s Verify-tab file '
+      + '(evidence/verify-tab/duel-verify-tab-dice-2026-09-25.js, E13, SHA-256 38b257c6…, pinned with its runner in '
+      + 'src/operator-verifier.ts) unmodified on all 6,700 captured bets: its validateDiceResult string '
+      + '((value % 10001) / 100).toString(), mapped onto the 0..10000 lattice by rollUnits (which rejects any string that '
+      + 'is not exactly String(units / 100)), equals the served roll and src/rng.ts on 6,700/6,700; (2) "fixed vectors" — '
+      + 'the same block requires it to print each of the 7 known rolls exactly as units / 100, and tests/dice/RngSpecTests.ts '
+      + 'runs the spec\'s own vectors and properties against src/rng.ts (79/79); (3) "the adapter cites the operator source '
+      + 'line it ports" — superseded for this package by the 20 Oct 2026 rule that RNG code is rebuilt from a written spec: '
+      + 'nothing is ported, so no operator line is cited; docs/ALGORITHM.md §4 names the source of every step instead (Duel\'s public pages, the standard '
+      + 'construction, or the 6,700 live bets). Step 5 runs the same execution plus the file\'s own RANGE / MAX_FAIR against '
+      + 'src/rng.ts. FAIL probed: M05c (a logic line of the operator file changed AND re-pinned → disagreement), M05d (a '
+      + 'byte changed without re-pin → hash mismatch). Not established: that the Verify button, or Duel\'s server, runs '
       + 'exactly this code',
   },
   {
@@ -460,8 +463,8 @@ export const PACKAGE_CHECKS: Array<{ id: string; artifact: string; coverage: Cov
   },
   {
     id: 'DICE-29', artifact: 'tests/mutations.json + scripts/mutate.mjs', coverage: 'full',
-    note: 'a step-named mutation registry (49 entries) runs in a disposable copy via `npm run mutate`: '
-      + '49/49 mutations killed and 21/21 scored steps have at least one mutation that kills them '
+    note: 'a step-named mutation registry (48 entries) runs in a disposable copy via `npm run mutate`: '
+      + '48/48 mutations killed and 21/21 scored steps have at least one mutation that kills them '
       + '(verified by the runner\'s own coverage gate, which reads the scored steps from the baseline '
       + 'run rather than assuming them). Each entry carries an `expect` marker so the INTENDED step '
       + 'fires, and includes a re-pin-class forgery (M12b doctors the dataset and disables the '
@@ -480,7 +483,7 @@ export const PACKAGE_CHECKS: Array<{ id: string; artifact: string; coverage: Cov
       + 'control (M06b), one-1e-18-unit forgeries of a win credit (M07c) and a multiplier (M09b) that '
       + 'the former tolerances passed, the Step 7 stake-price comparison (M07d) and a byte-only change '
       + 'to a pinned artifact that only the Step 12 pin sees (M12d); added 2026-09-25 for Duel\'s own Verify-tab code '
-      + '(DICE-09): M05c forges it AND re-pins it, M05d edits it without re-pinning, M05e breaks a src/rng.ts citation; added 2026-09-25 '
+      + '(DICE-09): M05c forges it AND re-pins it, M05d edits it without re-pinning (M05e, which broke a src/rng.ts citation, was retired on 20 Oct 2026 with the citation table); added 2026-09-25 '
       + 'for the ProvablyFair.org player verifiers (DICE-24): M05f/M05g the docs-site derive.js forged-and-re-pinned / '
       + 'edited-without-re-pin, M05h/M05i/M05j the live-site chunk edited-without-re-pin / roll forged-and-re-pinned / '
       + 'printed seed hash forged-and-re-pinned; added 2026-10-14 for the RTP claim (Step 13): MC3a/MC3b '

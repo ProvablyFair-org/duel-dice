@@ -1,231 +1,297 @@
 /**
- * Duel.com Dice — RNG implementation.
+ * PROVENANCE (header added on integration, 20 Oct 2026; everything below this comment is the
+ * clean-room module byte for byte).
  *
- * PORTED FROM THE OPERATOR'S OWN SOURCE: the Dice code panel of duel.com → Provably Fair → Verify
- * (Expand → Copy), copied verbatim by the auditor on 2026-09-25 to
- * evidence/verify-tab/duel-verify-tab-dice-2026-09-25.js (SHA-256 38b257c6…950a5b, pinned in
- * src/operator-verifier.ts). "Lxx" is a line of that file. Every citation is listed in
- * OPERATOR_SOURCE_CITES and checked against the pinned bytes by Step 5 and the unit tests — a cited
- * line that does not carry the quoted text FAILs. Step 5 also EXECUTES that file on every captured
- * bet and requires its roll (a display string, value % RANGE / 100) to equal this module's on the
- * integer lattice. (Corrected 2026-09-25: this header used to cite only duel.com/fairness/verify.)
- * The win rule and the multiplier below are NOT in the operator file — it computes the roll only.
+ * This module was REBUILT FROM A WRITTEN SPECIFICATION, not ported from Duel's code:
+ *   spec      docs/ALGORITHM.md, a copy of games/dice/ALGORITHM.md in the ProvablyFair.org audit
+ *             framework (pf-audit, branch clean-room-spec-2026-10-20, commit cc279ef). Written from
+ *             Duel's public pages, the standard provably-fair construction and the 6,700 live bets,
+ *             without opening Duel's code (its §8 lists every file read).
+ *   rebuild   written by an implementer who read ONLY that spec and a module-interface file, and
+ *             never opened Duel's code, its Verify-tab file, or this package's earlier src/rng.ts.
+ *   self-test tests/dice/RngSpecTests.ts (the spec's §5 vectors and properties).
  *
- * Algorithm: HMAC-SHA256 with rejection sampling.
- *   key     = hex_decode(serverSeed)   ← hex bytes, NOT UTF-8 string        L28, L34
- *   message = clientSeed + ":" + nonce                                     L53
- *   hash    = HMAC-SHA256(key, message)                                    L56
+ * Duel's published Verify-tab code (evidence/verify-tab/duel-verify-tab-dice-2026-09-25.js, E13) is
+ * NOT the source of this module. It is run byte for byte as a SECOND CHECK, by Step 5 and the unit
+ * tests (src/operator-verifier.ts), next to the ProvablyFair.org docs-site and live-site verifiers.
  *
- * Rejection sampling (modulo bias prevention):
- *   RANGE    = 10001                                                       L45
- *   MAX_U32  = 0xFFFFFFFF                                                  L44
- *   MAX_FAIR = MAX_U32 − (MAX_U32 % RANGE)                                 L48
- *   scan 4-byte (8 hex-char) chunks of hash left-to-right:                 L60, L62, L70
- *     if chunk < MAX_FAIR → result = chunk % RANGE   (0–10000)            L65, L66 (the file divides by 100 to display)
- *   every chunk rejected → throw                                           L74
- *
- * Win condition (over bet): result > target
- * Win chance:  (10000 − target) / 10001
- * Multiplier:  0.999 / win_chance
+ * Three-way agreement measured on integration (20 Oct 2026, the 6,700-bet capture): this module vs
+ * the live bets, roll / commitment / win flag 6,700/6,700 and payout 2,519/2,519 wins; vs Duel's
+ * Verify-tab code 6,700/6,700 rolls; vs the provablyfair.org live verifier 6,700/6,700 rolls.
+ * Step 5 of `npm run verify` re-measures all three on every run.
  */
+// Duel.com Dice: outcome derivation and settlement, written from ALGORITHM.md only.
+// Node `crypto` only, no other dependencies. Section numbers (§) refer to ALGORITHM.md.
 
-import * as crypto from 'crypto';
+import { createHash, createHmac } from 'crypto';
 
-// ── Operator source citations (checked, not decorative) ────────────────────
-/**
- * Each entry: a line of evidence/verify-tab/duel-verify-tab-dice-2026-09-25.js and text that line
- * must contain verbatim. src/operator-verifier.ts checkOperatorCites reads the pinned file and FAILs
- * any entry whose line does not carry its text.
- */
-export const OPERATOR_SOURCE_CITES: ReadonlyArray<{ line: number; text: string; ports: string }> = Object.freeze([
-  { line: 28, text: 'const keyBytes = hexToBytes(keyHex);', ports: 'the server seed is hex-decoded to the HMAC key' },
-  { line: 34, text: "{ name: 'HMAC', hash: 'SHA-256' },", ports: 'HMAC-SHA256' },
-  { line: 44, text: 'const MAX_UINT32 = 0xffffffff;', ports: 'MAX_U32' },
-  { line: 45, text: 'const RANGE = 10001; // 0-10000 inclusive', ports: 'RANGE' },
-  { line: 48, text: 'const MAX_FAIR = MAX_UINT32 - (MAX_UINT32 % RANGE);', ports: 'MAX_FAIR' },
-  { line: 53, text: 'new TextEncoder().encode(`${clientSeed}:${nonce}`)', ports: 'the HMAC message (no cursor)' },
-  { line: 60, text: 'while (offset + 8 <= hash.length) {', ports: 'eight 4-byte chunks, first to last' },
-  { line: 62, text: 'const value = parseInt(hash.slice(offset, offset + 8), 16);', ports: 'chunk read as a big-endian uint32 (8 hex chars)' },
-  { line: 65, text: 'if (value < MAX_FAIR) {', ports: 'accept below MAX_FAIR' },
-  { line: 66, text: 'return ((value % RANGE) / 100).toString();', ports: 'roll = value mod RANGE (the file displays it / 100)' },
-  { line: 70, text: 'offset += 8;', ports: 'next chunk on rejection' },
-  { line: 74, text: "throw new Error('Failed to generate unbiased dice value from hash');", ports: 'every chunk rejected → throw' },
-]);
+// ---------------------------------------------------------------------------
+// Constants (§2 Step 2)
+// ---------------------------------------------------------------------------
 
-export const RANGE    = 10001;                          // operator L45
-export const MAX_U32  = 0xFFFFFFFF;                     // operator L44
-export const MAX_FAIR = MAX_U32 - (MAX_U32 % RANGE);   // operator L48
+/** Number of distinct roll outcomes: the lattice 0, 1, ..., 10000 (§2 Step 2, N = 10001). */
+export const RANGE: number = 10001;
+
+/** Largest unsigned 32-bit value, 2^32 - 1. */
+export const MAX_U32: number = 0xffffffff;
 
 /**
- * THE DRAW BIAS BOUND, COMPUTED FROM THE SAME NUMBERS THE DRAW USES.
- *
- * `computeResultFromBuffer` scans 32-bit chunks and accepts the first `value < MAX_FAIR`,
- * returning `value % RANGE`. Whether that draw is uniform on 0..RANGE-1 is decided before any
- * live roll: the accepted window [0, MAX_FAIR) must hold a WHOLE number of ranges, or the low
- * residues are over-represented and no amount of captured data corrects it. This function
- * recomputes the bound from `RANGE`, `MAX_U32` and `MAX_FAIR` — the same three constants the
- * draw reads — so the number a step prints describes the code that produced the rolls, not a
- * claim typed beside it.
- *
- * Because `MAX_FAIR = MAX_U32 − (MAX_U32 % RANGE)` is by construction a multiple of RANGE, the
- * accepted window divides exactly: every residue 0..RANGE-1 is produced by exactly
- * `MAX_FAIR / RANGE` of the accepted 32-bit values, so its conditional probability given
- * acceptance is exactly 1/RANGE and the worst-case bias is 0 — well inside the profile's 2^-32
- * ceiling. The rejection census (how many of the 2^32 chunk values fall in the discarded tail
- * [MAX_FAIR, 2^32)) is returned too, since the profile asks for it when rejection sampling is
- * the mechanism.
- *
- * Returned as numbers, never as a sentence: the profile's floor is 2^-32 and a reader has to be
- * able to compare the two.
+ * Rejection limit (§2 Step 2, LIMIT = floor(2^32 / N) * N = 4294959453).
+ * A 4-byte chunk whose value is >= this is discarded so that every residue
+ * mod RANGE is equally likely.
  */
+export const MAX_FAIR: number = Math.floor((MAX_U32 + 1) / RANGE) * RANGE;
+
+// ---------------------------------------------------------------------------
+// Analytic bias report (§2 Step 2, rejection sampling)
+// ---------------------------------------------------------------------------
+
 export function drawBiasBound(): {
   algorithm: 'rejection-sampling';
-  range: number;
-  maxU32: number;
-  maxFair: number;
+  range: number; maxU32: number; maxFair: number;
   rangesAccepted: number;
   wholeNumberOfRanges: boolean;
   domainSize: number;
   remainder: number;
-  minResidueCount: number;
-  maxResidueCount: number;
+  minResidueCount: number; maxResidueCount: number;
   bias: number;
   exact: boolean;
   rejectionSampling: boolean;
   rejectedDrawsPerChunk: number;
   rejectionProbabilityPerChunk: number;
 } {
-  // The chunk value is parseInt of 8 hex chars → an integer in [0, 2^32 − 1], i.e. 2^32 values.
-  const domainSize = MAX_U32 + 1;                 // 2^32 possible chunk values
-  const rangesAccepted = MAX_FAIR / RANGE;        // whole number by construction
-  const remainder = MAX_FAIR % RANGE;             // 0 ⇒ the window holds a whole number of ranges
-  // Residue counts across the ACCEPTED window [0, MAX_FAIR): a value v is accepted iff v < MAX_FAIR,
-  // and each residue r is produced by floor((MAX_FAIR − 1 − r) / RANGE) + 1 accepted values.
-  const minResidueCount = Math.floor(MAX_FAIR / RANGE);
-  const maxResidueCount = remainder === 0 ? minResidueCount : minResidueCount + 1;
-  // Bias = the largest gap between any residue's share of the accepted window and the ideal 1/RANGE.
-  const bias = Math.max(
-    maxResidueCount / MAX_FAIR - 1 / RANGE,
-    1 / RANGE - minResidueCount / MAX_FAIR,
-  );
-  const rejectedDrawsPerChunk = domainSize - MAX_FAIR;  // values in the discarded tail [MAX_FAIR, 2^32)
+  // Work in BigInt so nothing here depends on float rounding.
+  const range = BigInt(RANGE);
+  const maxFair = BigInt(MAX_FAIR);
+  const domain = BigInt(MAX_U32) + 1n; // 2^32 distinct chunk values
+
+  // Accepted values are 0 .. MAX_FAIR-1. Residue r mod RANGE occurs
+  // floor(MAX_FAIR/RANGE) times, plus one more for r < MAX_FAIR mod RANGE.
+  const whole = maxFair / range;
+  const extra = maxFair % range;
+  const minCount = whole;
+  const maxCount = extra === 0n ? whole : whole + 1n;
+
+  // Worst-case |count/MAX_FAIR - 1/RANGE| = |count*RANGE - MAX_FAIR| / (MAX_FAIR*RANGE).
+  // The numerator is an integer, so "exactly zero" is decided without floats.
+  const devMax = maxCount * range - maxFair;
+  const devMin = maxFair - minCount * range;
+  const worstNum = devMax > devMin ? devMax : devMin;
+  const bias = Number(worstNum) / (Number(maxFair) * Number(range));
+
+  const rejected = domain - maxFair;
+
   return {
     algorithm: 'rejection-sampling',
     range: RANGE,
     maxU32: MAX_U32,
     maxFair: MAX_FAIR,
-    rangesAccepted,
-    wholeNumberOfRanges: remainder === 0,
-    domainSize,
-    remainder,
-    minResidueCount,
-    maxResidueCount,
+    rangesAccepted: MAX_FAIR / RANGE,
+    wholeNumberOfRanges: extra === 0n,
+    domainSize: Number(domain),
+    remainder: Number(rejected),
+    minResidueCount: Number(minCount),
+    maxResidueCount: Number(maxCount),
     bias,
-    exact: remainder === 0,
+    exact: worstNum === 0n,
     rejectionSampling: true,
-    rejectedDrawsPerChunk,
-    rejectionProbabilityPerChunk: rejectedDrawsPerChunk / domainSize,
+    rejectedDrawsPerChunk: Number(rejected),
+    rejectionProbabilityPerChunk: Number(rejected) / Number(domain),
   };
 }
 
+// ---------------------------------------------------------------------------
+// Input handling (§1.1)
+// ---------------------------------------------------------------------------
+
+const SEED_HEX = /^[0-9a-fA-F]{64}$/;
+
 /**
- * Compute the dice result (0–10000) from revealed seed components.
- * Key must be the hex-decoded server seed buffer.
+ * Decode the 64-hex-character server seed into its 32 raw bytes (§1.1, §1.2, §2 Step 1).
+ * Buffer.from(..., 'hex') silently stops at the first bad character, so the
+ * form is checked first. Upper-case hex is accepted (same bytes); §1.1 says the
+ * seed is published lower-case.
  */
-export function computeResultFromBuffer(
-  keyBuffer: Buffer,
-  clientSeed: string,
-  nonce: number,
-): number {
-  const message = `${clientSeed}:${nonce}`;                                         // operator L53
-  const hash    = crypto.createHmac('sha256', keyBuffer).update(message).digest('hex');  // operator L27–L42, L56
-
-  for (let off = 0; off + 8 <= hash.length; off += 8) {         // operator L60, L70
-    const value = parseInt(hash.substring(off, off + 8), 16);   // operator L62
-    if (value < MAX_FAIR) {                                     // operator L65
-      return value % RANGE;  // 0–10000 integer                    operator L66 (without the display / 100)
-    }
-  }                                                             // all rejected → operator L74 throws
-  // Probability ~1.24×10⁻⁴⁶ — practically unreachable
-  throw new Error(`RNG hash exhausted for nonce=${nonce}`);
+function decodeServerSeed(serverSeed: string): Buffer {
+  if (typeof serverSeed !== 'string' || !SEED_HEX.test(serverSeed)) {
+    throw new TypeError('serverSeed must be 64 hexadecimal characters (§1.1)');
+  }
+  return Buffer.from(serverSeed, 'hex');
 }
 
-export function computeResult(
-  serverSeed: string,
-  clientSeed: string,
-  nonce: number,
-): number {
-  const key = Buffer.from(serverSeed, 'hex');
-  return computeResultFromBuffer(key, clientSeed, nonce);
+/** §1.1 / §2 Step 1: nonce is a non-negative integer, written in plain base 10. */
+function nonceToDecimal(nonce: number): string {
+  if (!Number.isSafeInteger(nonce) || nonce < 0) {
+    throw new RangeError('nonce must be a non-negative safe integer (§1.1)');
+  }
+  return nonce.toString(10); // no padding, no sign, no separators
 }
 
-/** SHA-256 commit-reveal: verify SHA-256(hex_bytes(serverSeed)) === serverSeedHashed */
-export function verifyHash(serverSeed: string, serverSeedHashed: string): boolean {
-  const seedBytes = Buffer.from(serverSeed, 'hex');
-  const computed  = crypto.createHash('sha256').update(seedBytes).digest('hex');
-  return computed === serverSeedHashed;
-}
-
-/** Theoretical win chance for an "over" bet at the given target (0–9999). */
-export function theoreticalWinChance(target: number): number {
-  return (10000 - target) / RANGE;
-}
-
-/** Theoretical multiplier for a win at the given target. */
-export function theoreticalMultiplier(target: number): number {
-  return 0.999 / theoreticalWinChance(target);
-}
-
-// ── EXACT ARITHMETIC ON THE SERVED 1e-18 GRID ───────────────────────────────────
-// Duel serves `multiplier`, `amount_currency` and `amount_won` as decimal strings with at most 18
-// fractional digits. Parsing them to a double and comparing at a tolerance throws away the one
-// property that makes an exact check possible: every served figure is an integer count of 1e-18
-// units. The helpers below keep it that way — BigInt end to end, no float anywhere — so a served
-// figure one grid unit (1e-18) off its declared rule is a mismatch, not noise.
-//
-// The declared formula is multiplier = 0.999 / ((10000 − target) / RANGE), i.e. the exact rational
-//   EDGE_NUM · RANGE / (EDGE_DEN · (10000 − target)),   EDGE_NUM / EDGE_DEN = 999 / 1000 = 0.999
-// and the declared rounding onto the grid is to the NEAREST unit. (The capture holds no exact tie,
-// so the direction a tie would round is unwitnessed; the helpers count ties so a step can say so.)
-
-/** The declared edge factor 0.999 as an exact ratio (published fairness page). */
-export const EDGE_NUM = 999n;
-export const EDGE_DEN = 1000n;
-/** Fractional digits of every served money / multiplier string. */
-export const GRID_DP = 18;
-/** One unit of the served grid is 1 / GRID. */
-export const GRID = 10n ** BigInt(GRID_DP);
+// ---------------------------------------------------------------------------
+// Roll derivation (§2)
+// ---------------------------------------------------------------------------
 
 /**
- * A served decimal string → integer units of 1e-18, or null when it is not a plain non-negative
- * decimal with at most 18 fractional digits (a value off the grid cannot be compared on it).
+ * Roll in 0..RANGE-1 from the already-decoded server seed bytes.
+ *
+ * §2 Step 1: HMAC-SHA256, key = server seed bytes, message = UTF-8 of
+ *            `${clientSeed}:${nonce}`.
+ * §2 Step 2: walk the 32-byte digest in eight 4-byte chunks, each read as a
+ *            big-endian unsigned 32-bit integer; the first chunk below MAX_FAIR
+ *            gives roll = chunk mod RANGE.
+ * §6 O1:     the spec does not settle what happens if all eight chunks are
+ *            rejected (probability about 1e-46). Rather than invent a rule,
+ *            this throws.
+ */
+export function computeResultFromBuffer(keyBuffer: Buffer, clientSeed: string, nonce: number): number {
+  if (!Buffer.isBuffer(keyBuffer)) {
+    throw new TypeError('keyBuffer must be a Buffer');
+  }
+  if (typeof clientSeed !== 'string') {
+    throw new TypeError('clientSeed must be a string');
+  }
+  // §2 Step 1 (UTF-8 encoding: §6 O6).
+  const message = Buffer.from(`${clientSeed}:${nonceToDecimal(nonce)}`, 'utf8');
+  const digest = createHmac('sha256', keyBuffer).update(message).digest();
+
+  // §2 Step 2: chunk offsets 0, 4, ..., 28.
+  for (let i = 0; i + 4 <= digest.length; i += 4) {
+    const v = digest.readUInt32BE(i);
+    if (v < MAX_FAIR) {
+      return v % RANGE;
+    }
+  }
+  throw new Error('all 8 digest chunks rejected: continuation is unspecified (§6 O1)');
+}
+
+/** Same as computeResultFromBuffer, taking the server seed as published (64 hex chars, §1.1). */
+export function computeResult(serverSeed: string, clientSeed: string, nonce: number): number {
+  return computeResultFromBuffer(decodeServerSeed(serverSeed), clientSeed, nonce);
+}
+
+// ---------------------------------------------------------------------------
+// Commitment (§1.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * §1.2: commitment = lower-case hex of SHA-256 over the 32 decoded seed bytes
+ * (not over the 64 ASCII characters). Returns false, never throws, on any
+ * malformed input. The published hash is compared case-insensitively, since
+ * upper- and lower-case hex name the same bytes.
+ */
+export function verifyHash(serverSeed: string, serverSeedHashed: string): boolean {
+  if (typeof serverSeed !== 'string' || !SEED_HEX.test(serverSeed)) return false;
+  if (typeof serverSeedHashed !== 'string' || !SEED_HEX.test(serverSeedHashed)) return false;
+  const commitment = createHash('sha256').update(Buffer.from(serverSeed, 'hex')).digest('hex');
+  return commitment === serverSeedHashed.toLowerCase();
+}
+
+// ---------------------------------------------------------------------------
+// Win condition, chance, multiplier for "over" bets (§3.1, §3.2, §3.4)
+// ---------------------------------------------------------------------------
+
+/** Lower and upper end of the CONFIG scaling_edge bands, in winning outcomes (§3.3). */
+const MIN_BAND_COUNT = 2;
+const MAX_BAND_COUNT = 9998;
+
+/** §3.1 "over": win iff roll > target, so count = 10000 - target winning outcomes. */
+function overCount(target: number): number {
+  if (!Number.isInteger(target) || target < 0 || target > RANGE - 1) {
+    throw new RangeError('target must be an integer in 0..10000 (§1.1)');
+  }
+  return RANGE - 1 - target;
+}
+
+/**
+ * The edge is only defined where a CONFIG band exists (§3.3: keys run 2..9998),
+ * so the multiplier and payout refuse a target whose count falls outside that.
+ */
+function overCountInBands(target: number): number {
+  const count = overCount(target);
+  if (count < MIN_BAND_COUNT || count > MAX_BAND_COUNT) {
+    throw new RangeError(`count ${count} is outside the scaling_edge bands ${MIN_BAND_COUNT}..${MAX_BAND_COUNT} (§3.3)`);
+  }
+  return count;
+}
+
+/** §3.2: win_chance = count / 10001 (as a float; the 18-dp served form is checked via the grid functions). */
+export function theoreticalWinChance(target: number): number {
+  return overCount(target) / RANGE;
+}
+
+/** §3.4: multiplier = (1 - e) * 10001 / count, audited tier e = 0.001 (as a float). */
+export function theoreticalMultiplier(target: number): number {
+  const count = overCountInBands(target);
+  return (Number(EDGE_NUM) * RANGE) / (Number(EDGE_DEN) * count);
+}
+
+// ---------------------------------------------------------------------------
+// Exact arithmetic on the 1e-18 grid (§3.2, §3.4, §3.5)
+// ---------------------------------------------------------------------------
+
+/**
+ * (1 - e) for the audited tier. §3.3: every captured bet used house_edge
+ * "0.001", so 1 - e = 999/1000. Other tiers are not modelled (§6 O3).
+ */
+export const EDGE_NUM: bigint = 999n;
+export const EDGE_DEN: bigint = 1000n;
+
+/** Served values carry 18 decimal places (§3.2, §3.4, §3.5). */
+export const GRID_DP: number = 18;
+export const GRID: bigint = 10n ** 18n;
+
+const PLAIN_DECIMAL = /^(\d+)(?:\.(\d{1,18}))?$/;
+
+/**
+ * Served decimal string -> integer count of 1e-18 units.
+ * Accepts only a plain non-negative decimal: digits, optionally a dot and 1..18
+ * fraction digits. No sign, exponent, whitespace or bare dot. Trailing zeros
+ * may have been stripped by the server (§3.5), so the fraction is right-padded.
+ * Anything that is not a string returns null (a JSON number may already have
+ * lost precision).
  */
 export function parseGridUnits(s: unknown): bigint | null {
-  if (typeof s !== 'string' || !/^\d+(\.\d{1,18})?$/.test(s)) return null;
-  const [i, f = ''] = s.split('.');
-  return BigInt(i) * GRID + BigInt((f + '0'.repeat(GRID_DP)).slice(0, GRID_DP));
+  if (typeof s !== 'string') return null;
+  const m = PLAIN_DECIMAL.exec(s);
+  if (m === null) return null;
+  const intPart = m[1] as string;
+  const fracPart = (m[2] ?? '').padEnd(GRID_DP, '0');
+  return BigInt(intPart) * GRID + BigInt(fracPart);
 }
 
-/** num / den rounded to the nearest integer (ties up); `tie` reports an exact half. */
+/**
+ * num/den rounded to the nearest integer, for num >= 0 and den > 0.
+ * §3.2 / §3.4 / §3.5 say "rounded to nearest"; §6 O7 leaves the tie mode open
+ * (half-up and half-even both fit every captured value). This rounds a tie
+ * HALF-UP (away from zero, for these non-negative inputs) and reports tie=true
+ * so the caller can see when the choice mattered.
+ */
 export function roundNearest(num: bigint, den: bigint): { q: bigint; tie: boolean } {
-  const q = num / den, r = num % den;
-  return { q: 2n * r >= den ? q + 1n : q, tie: 2n * r === den };
+  if (den <= 0n) throw new RangeError('den must be > 0');
+  if (num < 0n) throw new RangeError('num must be >= 0');
+  const q = num / den;
+  const twiceRem = (num % den) * 2n;
+  if (twiceRem > den) return { q: q + 1n, tie: false };
+  if (twiceRem === den) return { q: q + 1n, tie: true };
+  return { q, tie: false };
 }
 
-/** The declared multiplier at `target`, rounded to the nearest 1e-18 unit. */
+/** §3.4: exact (1 - e) * 10001 / count, rounded once to the 1e-18 grid. */
 export function exactMultiplierUnits(target: number): { units: bigint; tie: boolean } {
-  const r = roundNearest(EDGE_NUM * BigInt(RANGE) * GRID, EDGE_DEN * BigInt(10000 - target));
+  const count = BigInt(overCountInBands(target));
+  const r = roundNearest(EDGE_NUM * BigInt(RANGE) * GRID, EDGE_DEN * count);
   return { units: r.q, tie: r.tie };
 }
 
 /**
- * The declared settlement of a win: stake × the EXACT formula multiplier (not the rounded served
- * string), rounded to the nearest 1e-18 unit. Measured on the capture before it was adopted:
- * rounding stake × the served multiplier instead disagrees by one unit wherever that product ends
- * in an exact half, and a half-down rule on it fails elsewhere; this rule is the one that fits
- * every win.
+ * §3.5 (winning bet): amount * (1 - e) * 10001 / count from the EXACT
+ * multiplier, rounded once to the 1e-18 grid. amountUnits is already in
+ * 1e-18 units, so the result is too. A losing bet pays 0 (§3.5); deciding
+ * win/loss is the caller's job (roll > target, §3.1).
  */
 export function exactPayoutUnits(amountUnits: bigint, target: number): { units: bigint; tie: boolean } {
-  const r = roundNearest(amountUnits * EDGE_NUM * BigInt(RANGE), EDGE_DEN * BigInt(10000 - target));
+  if (amountUnits < 0n) throw new RangeError('amountUnits must be >= 0');
+  const count = BigInt(overCountInBands(target));
+  const r = roundNearest(amountUnits * EDGE_NUM * BigInt(RANGE), EDGE_DEN * count);
   return { units: r.q, tie: r.tie };
 }

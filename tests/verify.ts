@@ -9,7 +9,8 @@ import * as fs   from 'fs';
 import * as path from 'path';
 
 import { loadDataset, checkDatasetHash, buildSeedMap, groupByHash } from '../src/loader';
-import type { VerifyContext, InfoItem }                 from './steps/context';
+import type { VerifyContext, InfoItem, StepResult }     from './steps/context';
+import { step }                                         from './steps/context';
 
 import * as commitment  from './steps/commitment';
 import * as determinism from './steps/determinism';
@@ -70,16 +71,31 @@ const ctx: VerifyContext = {
 
 // ── Run scored steps ─────────────────────────────────────────────────────────
 
+// FAIL CLOSED, NEVER CRASH (since v1.2.0). src/rng.ts, rebuilt from docs/ALGORITHM.md, THROWS on an input
+// outside the spec's domain (a target whose winning-outcome count has no scaling_edge band, a malformed
+// seed, a negative nonce) where the v1.1.0 port returned a number. A served value outside that domain
+// is a finding, so a step module that throws on it FAILs each step it carries, with the error, and the
+// run continues to a verdict — it does not die before printing one (mutation M18 drives a target out
+// of range and requires Step 18 to report it).
+function guarded(steps: readonly number[], run: () => StepResult[]): StepResult[] {
+  try { return run(); } catch (e) {
+    const why = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+    return steps.map(n => step(n, 'Step module threw', 'FAIL',
+      `the step could not complete on this data — ${why} (an input outside the declared domain FAILs, it is never skipped)`,
+      { threw: why }));
+  }
+}
+
 const results = [
-  ...commitment.run(ctx),   // Steps  1– 4
-  ...determinism.run(ctx),  // Steps  5– 6
-  ...payouts.run(ctx),      // Steps  7–10
-  ...dataset.run(ctx),      // Steps 11–15
-  ...simulation.run(ctx),   // Steps 16–17
-  ...coverage.run(ctx),     // Step  18
-  ...bias.run(ctx),         // Step  19
-  ...monotonicity.run(ctx), // Step  20
-  ...liveFit.run(ctx),      // Step  21
+  ...guarded([1, 2, 3, 4], () => commitment.run(ctx)),     // Steps  1– 4
+  ...guarded([5, 6], () => determinism.run(ctx)),          // Steps  5– 6
+  ...guarded([7, 8, 9, 10], () => payouts.run(ctx)),       // Steps  7–10
+  ...guarded([11, 12, 13, 14, 15], () => dataset.run(ctx)), // Steps 11–15
+  ...guarded([16, 17], () => simulation.run(ctx)),         // Steps 16–17
+  ...guarded([18], () => coverage.run(ctx)),               // Step  18
+  ...guarded([19], () => bias.run(ctx)),                   // Step  19
+  ...guarded([20], () => monotonicity.run(ctx)),           // Step  20
+  ...guarded([21], () => liveFit.run(ctx)),                // Step  21
 ];
 
 // ── RTP-CLAIM rule (1.2.0, Methodology v1.1; 1.0.0 agreed 2026-09-29) ───────────

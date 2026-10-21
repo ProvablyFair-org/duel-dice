@@ -28,7 +28,7 @@ export const SIM_SERIAL_DRAWS     = SIM_UNIFORMITY_DRAWS; // serial screens run 
 
 // ── Pass 1 — edge convergence on ≥9 target bands spanning both ends ────────────
 // Ten 1,000,000-bet bands, targets 500…9500, spanning the high-win-chance and low-win-chance ends
-// of the valid 1..9999 target space. Each band's WIN COUNT is the census; the verifier re-derives
+// of the valid 2..9998 target space. Each band's WIN COUNT is the census; the verifier re-derives
 // the win rate, the effective RTP and the goodness-of-fit chi-squared from it.
 export const SIM_EDGE_BETS  = 1_000_000;          // ≥ 1,000,000 per band (DICE-20 floor)
 export const SIM_EDGE_TARGETS: readonly number[] =

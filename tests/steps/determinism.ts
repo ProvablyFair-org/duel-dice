@@ -1,8 +1,8 @@
 /**
  * Steps 5–6: RNG Determinism
  *
- * Step 5 carries four legs: the package's own recomputation (DICE-07), Duel's own Verify-tab code
- * (DICE-09), and the two ProvablyFair.org player verifiers — the docs-site derive.js and the live
+ * Step 5 carries four legs: the package's own recomputation (DICE-07; src/rng.ts, rebuilt from the
+ * written spec docs/ALGORITHM.md), Duel's own Verify-tab code run as a second check (DICE-09), and the two ProvablyFair.org player verifiers — the docs-site derive.js and the live
  * www.provablyfair.org/verify-bets bundle (DICE-24) — each executed from pinned bytes on every bet.
  */
 
@@ -10,7 +10,7 @@ import type { StepResult } from './context';
 import { step, VerifyContext } from './context';
 import { computeResultFromBuffer, computeResult, RANGE, MAX_FAIR } from '../../src/rng';
 import {
-  runOperatorVerifier, checkOperatorCites, rollUnits, OPERATOR_EXPECTED_LOGS, OPERATOR_VERIFIER_PROVENANCE,
+  runOperatorVerifier, rollUnits, OPERATOR_EXPECTED_LOGS, OPERATOR_VERIFIER_PROVENANCE,
 } from '../../src/operator-verifier';
 import { EXPECTED_BETS, EXPECTED_EPOCHS } from '../../src/loader';
 import { theoreticalWinChance, theoreticalMultiplier } from '../../src/rng';
@@ -45,15 +45,17 @@ export function run(ctx: VerifyContext): StepResult[] {
   ctx.step5Skipped    = skipped;
   const recomputed = bets.length - skipped;
 
-  // ── Step 5, operator leg: THE OPERATOR'S OWN Verify-tab code (DICE-09) ─────
+  // ── Step 5, operator leg: THE OPERATOR'S OWN Verify-tab code (DICE-09), a SECOND CHECK ─────
+  // src/rng.ts is rebuilt from the written spec docs/ALGORITHM.md, not from this code; Duel's file is
+  // run here as an independent cross-check of that rebuild and of the served rolls, never as its source.
   // Duel's Dice code panel (duel.com → Provably Fair → Verify → Expand → Copy, 2026-09-25) is
   // vendored verbatim under evidence/verify-tab/ and pinned in src/operator-verifier.ts. Its own
   // validateDiceResult is EXECUTED unmodified on every bet. It returns a display string,
   // ((value % RANGE) / 100).toString(); rollUnits maps it onto the 0..10000 lattice and REJECTS any
   // string that is not exactly String(units / 100), so the comparison is exact integer equality —
   // with the served roll AND with src/rng.ts. Its RANGE and MAX_FAIR constants must equal src/rng.ts's,
-  // it must print only its empty-input message, and every operator line src/rng.ts cites must carry
-  // its quoted text. HARD FAIL otherwise, or on a count other than EXPECTED_BETS.
+  // and it must print only its empty-input message. HARD FAIL otherwise, or on a count other than
+  // EXPECTED_BETS.
   const opIssues: string[] = [];
   const opRounds: Array<{ id: string; serverSeed: string; clientSeed: string; nonce: number }> = [];
   bets.forEach((b, i) => {
@@ -61,7 +63,6 @@ export function run(ctx: VerifyContext): StepResult[] {
     if (ss) opRounds.push({ id: String(i), serverSeed: ss, clientSeed: b.response.client_seed, nonce: b.response.nonce });
   });
   const op = runOperatorVerifier(opRounds);
-  const opCites = checkOperatorCites();
   let opChecked = 0, opVsServed = 0, opVsRng = 0, opOffGrid = 0;
   const opFirst: string[] = [];
   if (!op.results) {
@@ -87,7 +88,6 @@ export function run(ctx: VerifyContext): StepResult[] {
         + `off the /100 lattice on ${opOffGrid} bet(s) (${opFirst.join('; ')})`);
     }
   }
-  if (opCites.bad.length > 0 || opCites.checked === 0) opIssues.push(`src/rng.ts operator citations: ${opCites.bad.slice(0, 2).join('; ')}`);
 
   // ── Step 5, docs-site leg: the ProvablyFair.org VerifyBets derive.js (DICE-24) ─────
   // The docs site's Dice verifier (games/dice/derive.js + its one import lib/hmac-sha256.js,
@@ -95,16 +95,28 @@ export function run(ctx: VerifyContext): StepResult[] {
   // under verifier-parity/ and pinned in src/site-verifier.ts. Its own deriveDice is EXECUTED on every
   // captured bet. SCORED, each on all EXPECTED_BETS bets: (1) its roll equals the served roll AND
   // src/rng.ts, exact integer equality; (2) its isWin equals the served is_win; (3) its winChance is
-  // bit-identical to src/rng.ts theoreticalWinChance(target); (4) on a win its multiplier is
-  // bit-identical to src/rng.ts theoreticalMultiplier(target) — the value Step 9 binds to the served
-  // multiplier on the 1e-18 grid — and on a loss it is 0 (the page prints "0×"). RECORDED, not scored:
+  // bit-identical to src/rng.ts theoreticalWinChance(target); (4) on a win its multiplier is within
+  // ONE ULP of src/rng.ts theoreticalMultiplier(target) — the value Step 9 binds to the served
+  // multiplier on the 1e-18 grid — and on a loss it is 0 (the page prints "0×"). Why one ulp and not
+  // bit-identity (since v1.2.0): src/rng.ts, rebuilt from docs/ALGORITHM.md, computes 9990999 / (1000 ·
+  // count), one IEEE division of two exact integers, i.e. the correctly rounded double of the exact
+  // multiplier. derive.js computes 0.999 / winChance, two roundings, and lands one ulp away on 2,620 of
+  // the 9,997 legal targets (593 of the 2,519 captured wins). The v1.1.0 port used derive.js's form, so
+  // the two were bit-identical then. A difference of more than one ulp still FAILs; the one-ulp count
+  // is RECORDED. RECORDED, not scored:
   // the page shows the multiplier as toFixed(4); where the served 18-dp multiplier sits exactly on a
   // 4-dp half, the nearest double lies below it and the page prints the lower digit — no rounding rule
   // for a 4-dp display is declared by the operator, so the count is printed, not judged.
   const siteIssues: string[] = [];
   const sv = loadSiteVerifier();
   let siteChecked = 0, siteRollVsServed = 0, siteRollVsRng = 0, siteWinFlag = 0, siteWinChance = 0, siteMult = 0, siteThrew = 0;
-  let siteWins = 0, siteDisplayTies = 0, siteDisplayLowerOnTie = 0;
+  let siteWins = 0, siteDisplayTies = 0, siteDisplayLowerOnTie = 0, siteMultOneUlp = 0;
+  const ulpDistance = (a: number, b: number): number => {
+    if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return a === b ? 0 : Infinity;
+    const v = new BigInt64Array(new Float64Array([a, b]).buffer);
+    const d = v[0] - v[1];
+    return Number(d < 0n ? -d : d);
+  };
   const siteFirst: string[] = [];
   const displayTieExamples: string[] = [];
   if (sv.error || !sv.deriveDice) {
@@ -126,7 +138,9 @@ export function run(ctx: VerifyContext): StepResult[] {
       if (r.winChance !== theoreticalWinChance(b.request.target)) siteWinChance++;
       if (b.response.is_win) {
         siteWins++;
-        if (r.multiplier !== theoreticalMultiplier(b.request.target)) { siteMult++; if (siteFirst.length < 3) siteFirst.push(`bet ${b.response.id}: site multiplier ${r.multiplier} vs src/rng.ts ${theoreticalMultiplier(b.request.target)}`); }
+        const ulps = ulpDistance(r.multiplier, theoreticalMultiplier(b.request.target));
+        if (ulps === 1) siteMultOneUlp++;
+        if (ulps > 1) { siteMult++; if (siteFirst.length < 3) siteFirst.push(`bet ${b.response.id}: site multiplier ${r.multiplier} vs src/rng.ts ${theoreticalMultiplier(b.request.target)}`); }
         const frac = (b.response.multiplier.split('.')[1] ?? '').padEnd(18, '0');
         if (frac.slice(4) === '5'.padEnd(14, '0')) {
           siteDisplayTies++;
@@ -192,19 +206,20 @@ export function run(ctx: VerifyContext): StepResult[] {
     s5Ok ? 'PASS' : 'FAIL',
     s5Ok
       ? `${recomputed}/${EXPECTED_BETS} bets recomputed to their recorded roll by exact integer `
-        + `equality on the 0..10000 lattice (${mismatches} mismatches, ${skipped} skipped); coverage `
-        + `equals the audited population expectedBets = ${EXPECTED_BETS}. Operator-code parity (DICE-09): Duel's own Dice `
-        + `Verify-tab code (${OPERATOR_VERIFIER_PROVENANCE.savedAs}, copied ${OPERATOR_VERIFIER_PROVENANCE.copiedOn}, SHA-256-pinned) `
+        + `equality on the 0..10000 lattice by src/rng.ts, rebuilt from the written spec docs/ALGORITHM.md `
+        + `(${mismatches} mismatches, ${skipped} skipped); coverage `
+        + `equals the audited population expectedBets = ${EXPECTED_BETS}. Operator-code parity (DICE-09), a second check `
+        + `and not the source of src/rng.ts: Duel's own Dice Verify-tab code (${OPERATOR_VERIFIER_PROVENANCE.savedAs}, copied ${OPERATOR_VERIFIER_PROVENANCE.copiedOn}, SHA-256-pinned) `
         + `executed unmodified on ${opChecked}/${EXPECTED_BETS} bets — its displayed roll, mapped exactly onto the 0..10000 lattice, `
         + `equals the served roll and src/rng.ts on every bet (${opVsServed} / ${opVsRng} differ, ${opOffGrid} off-grid); its RANGE `
-        + `${op.range} and MAX_FAIR ${op.maxFair} equal src/rng.ts; operator lines cited by src/rng.ts `
-        + `${opCites.checked - opCites.bad.length}/${opCites.checked} verbatim. Player-verifier parity (DICE-24): the `
+        + `${op.range} and MAX_FAIR ${op.maxFair} equal src/rng.ts. Player-verifier parity (DICE-24): the `
         + `ProvablyFair.org docs-site verifier (VerifyBets games/dice/derive.js + lib/hmac-sha256.js, `
         + `${SITE_VERIFIER_PROVENANCE.ref} @ ${SITE_VERIFIER_PROVENANCE.head.slice(0, 7)}, ${sv.files.filter(f => f.match).length}/`
         + `${sv.files.length} SHA-256 pins MATCH) executed on ${siteChecked}/${EXPECTED_BETS} bets: roll equal to the served roll and `
         + `src/rng.ts on every bet (${siteRollVsServed} / ${siteRollVsRng} differ), win flag equal to the served is_win `
-        + `(${siteWinFlag} differ), win chance bit-identical to src/rng.ts (${siteWinChance} differ), multiplier bit-identical `
-        + `to src/rng.ts on all ${siteWins} wins and 0 on every loss (${siteMult} differ); recorded, not scored: on `
+        + `(${siteWinFlag} differ), win chance bit-identical to src/rng.ts (${siteWinChance} differ), multiplier within one ulp `
+        + `of src/rng.ts on all ${siteWins} wins and 0 on every loss (${siteMult} differ; ${siteMultOneUlp} win(s) exactly one ulp `
+        + `apart, derive.js's 0.999 / winChance against the correctly rounded 9990999 / (1000 · count)); recorded, not scored: on `
         + `${siteDisplayTies} win(s) the served multiplier sits exactly on a 4-dp half and the page's toFixed(4) prints the lower `
         + `digit on ${siteDisplayLowerOnTie}. Live-site parity (DICE-24): the deployed ${LIVE_SITE_PROVENANCE.page} bundle `
         + `(3 chunks + runner, ${live.files.filter(f => f.match).length}/${live.files.length} SHA-256 pins MATCH) executed on `
@@ -226,13 +241,14 @@ export function run(ctx: VerifyContext): StepResult[] {
         files: op.files.map(f => ({ file: f.file, pinnedSha256: f.pinned, actualSha256: f.actual, match: f.match })),
         provenance: OPERATOR_VERIFIER_PROVENANCE, betsExecuted: opChecked, disagreeWithServed: opVsServed,
         disagreeWithRng: opVsRng, offGrid: opOffGrid, operatorRange: op.range, operatorMaxFair: op.maxFair,
-        citesChecked: opCites.checked, citesBad: opCites.bad.length, issues: opIssues,
+        issues: opIssues,
       },
       siteVerifier: {
         files: sv.files.map(f => ({ file: f.file, pinnedSha256: f.pinned, vendoredSha256: f.actual, match: f.match })),
         provenance: SITE_VERIFIER_PROVENANCE, betsExecuted: siteChecked, expectedBets: EXPECTED_BETS,
         rollDiffersFromServed: siteRollVsServed, rollDiffersFromRng: siteRollVsRng, winFlagDiffers: siteWinFlag,
-        winChanceDiffersFromRng: siteWinChance, multiplierDiffersFromRng: siteMult, threw: siteThrew, wins: siteWins,
+        winChanceDiffersFromRng: siteWinChance, multiplierDiffersFromRng: siteMult, multiplierOneUlpFromRng: siteMultOneUlp,
+        threw: siteThrew, wins: siteWins,
         displayFourDpTies: siteDisplayTies, displayLowerDigitOnTie: siteDisplayLowerOnTie, displayTieExamples,
         issues: siteIssues,
       },

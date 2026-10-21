@@ -4,9 +4,14 @@
  * Duel.com's Provably Fair → Verify page, with Dice selected, shows a JavaScript code panel behind an
  * "Expand" control (evidence/E03-fairness-verify-dice.png shows the page with the panel collapsed: only its
  * first lines are visible). That code is the operator's
- * published algorithm for Dice — Duel's own source for the roll. Until 2026-09-25 the package said Duel
- * ships no source (and no operator verifier) and src/rng.ts cited only the fairness page; that was wrong, and this
- * file is the correction.
+ * published algorithm for Dice. Until 2026-09-25 the package said Duel ships no source (and no operator
+ * verifier); that was wrong, and this file is the correction.
+ *
+ * ROLE (since 20 Oct 2026, v1.2.0). This file is a SECOND CHECK, not the source of src/rng.ts. src/rng.ts is
+ * rebuilt from the written specification docs/ALGORITHM.md by an implementer who never opened Duel's code;
+ * Duel's file is run here, byte for byte, to show that it agrees with that rebuild and with the served
+ * rolls. Through v1.1.0 src/rng.ts was a port of this file and, from 25 Sep 2026, cited 12 of its lines;
+ * the port and that citation table were removed on 20 Oct 2026.
  *
  * PROVENANCE. Copied by the auditor from duel.com → Provably Fair → Verify (Dice) → Expand → Copy on
  * 2026-09-25, and saved verbatim as evidence/verify-tab/duel-verify-tab-dice-2026-09-25.js
@@ -27,8 +32,6 @@
  *      The file returns the roll as a STRING, ((value % RANGE) / 100).toString() (L66). It is mapped
  *      onto the integer 0..10000 lattice (rollUnits below) and compared by exact integer equality;
  *      the mapping itself is checked: the string must be exactly String(units / 100).
- *   3. CHECKS THE CITATIONS: every line src/rng.ts cites (OPERATOR_SOURCE_CITES) must carry, at that
- *      line number of the pinned file, the text it quotes.
  */
 
 import * as crypto from 'crypto';
@@ -36,7 +39,6 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
-import { OPERATOR_SOURCE_CITES } from './rng';
 
 export const PACKAGE_ROOT = path.join(__dirname, '..');
 export const OPERATOR_VERIFIER_FILE = 'evidence/verify-tab/duel-verify-tab-dice-2026-09-25.js';
@@ -153,18 +155,4 @@ export function rollUnits(s: string | null | undefined): number | null {
   const units = Math.round(Number(s) * 100);
   if (!Number.isInteger(units) || units < 0 || units > 10000) return null;
   return String(units / 100) === s ? units : null;
-}
-
-/** Every citation in src/rng.ts must quote, verbatim, the pinned operator file at the line it names. */
-export function checkOperatorCites(root = PACKAGE_ROOT): { checked: number; bad: string[] } {
-  const p = path.join(root, OPERATOR_VERIFIER_FILE);
-  if (!fs.existsSync(p)) return { checked: 0, bad: [`${OPERATOR_VERIFIER_FILE} not found`] };
-  const lines = fs.readFileSync(p, 'utf8').split('\n');
-  const bad: string[] = [];
-  for (const c of OPERATOR_SOURCE_CITES) {
-    const at = lines[c.line - 1];
-    if (at === undefined || !at.includes(c.text)) bad.push(`L${c.line} does not contain ${JSON.stringify(c.text)} (it reads ${JSON.stringify((at ?? '').trim())})`);
-  }
-  if (OPERATOR_SOURCE_CITES.length === 0) bad.push('src/rng.ts cites no operator line');
-  return { checked: OPERATOR_SOURCE_CITES.length, bad };
 }

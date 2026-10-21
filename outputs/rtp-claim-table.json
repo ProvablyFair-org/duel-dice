@@ -9,7 +9,7 @@
   "claim": {
     "kind": "flat",
     "rtp": "0.999",
-    "source": "fairness page (Duel's Provably Fair page): payout multiplier = 0.999 / win chance, a flat 0.1 % house edge at the base edge tier; the duel.com dice config as fetched 2026-10-05 in a logged-in session (read-only GET; E14) scales the edge above it, not scored here (MANIFEST.md#payouts-and-rtp, MANIFEST.md#scaling-edge; declaration outcome.edge.claimed 0.001)"
+    "source": "game settings (Duel's dice config, GET /api/v2/dice/config, as fetched 2026-10-05 in a logged-in session, read-only GET; E14): the first tier of each of its 122 win-chance ranges has house_edge 0.001, a flat 0.1 % house edge (RTP 99.9 %) at the base edge tier; E14 holds no multiplier, and the 0.999 / win chance price is witnessed by the served multipliers (Step 9); a stated edge in the game settings counts as published (RTP-CLAIM 1.2.0, decision D2); E14 scales the edge above that tier, not scored here (MANIFEST.md#payouts-and-rtp, MANIFEST.md#scaling-edge; declaration outcome.edge.claimed 0.001). Noted, not tested (decision D3): the Dice bet panel is labelled \"Zero Edge\" (E01, E06-E08) while the base edge is 0.1 %"
   },
   "settings": 9997,
   "trueMin": {
