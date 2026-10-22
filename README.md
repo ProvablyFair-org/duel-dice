@@ -1,6 +1,6 @@
 # Duel Dice — Provably Fair Audit
 
-**Auditor:** [ProvablyFair.org](https://www.provablyfair.org) · **Audit ID:** PF-2026-DL02 · **Release:** `v1.2.0` · **Capture:** 11 April 2026
+**Auditor:** [ProvablyFair.org](https://www.provablyfair.org) · **Audit ID:** PF-2026-DL02 · **Release:** `v1.3.0` · **Capture:** 11 April 2026
 
 **Result: PROVABLY FAIR — Full Pass.** All 6,700 recorded rolls, every one a roll-over bet, reproduce from (serverSeed, clientSeed, nonce) to the exact `0..10000` lattice value, and every payout settles exactly. The verifier reports 20 passing steps of 21, one disclosed capture-origin flag and no hard failures. The flag is Step 4: in four epochs the capture missed one nonce on a retried request; each roll is reconstructed from a revealed seed whose hash matches the commitment the capture recorded before that epoch's bets, but was not witnessed live. It is verdict-neutral.
 
@@ -16,7 +16,7 @@
 | Seed records | 138 seed records; 138/138 next-seed promotions and 137/137 forward links |
 | Client seed | Wrong-seed and empty-seed controls change the roll at the lattice-predicted rate; 500 Phase D bets on 10 client seeds recompute |
 | Draw bias | `MAX_FAIR = 10001 × 429453` is a whole number of ranges, so the modulo bias is exactly 0 |
-| Simulation evidence | 2,000,000-draw uniformity census and 10 bands × 1,000,000 bets (mean RTP 99.761%); Pass 2 on 134 revealed epochs, no cherry-picking detected |
+| Simulation evidence | 2,000,000-draw uniformity census and 98 targets × 1,000,000 bets (mean RTP 99.922%); Pass 2 on 134 revealed epochs, no cherry-picking detected |
 | Player verification | Duel's own Verify-tab code (the second check) and both ProvablyFair.org verifiers reproduce all 6,700 rolls |
 
 Hash matching and the forward commitment chain order the supplied records; they do not date them. Coverage gaps, capture seeds and residual operator trust are retained in the [overview's limitations](MANIFEST.md#limitations-and-trust).

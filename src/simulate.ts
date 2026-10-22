@@ -49,8 +49,10 @@ import {
   SIM_PASS2_NONCES, SIM_PASS2_EARLY_WINDOW, SIM_PASS2_ALPHA,
 } from './sim-config';
 
-// Pinned simulation seeds — one unique pair per use. Generated once via crypto.randomBytes(32/16),
-// pinned for reproducibility; distinct seeds per band avoid cross-target correlation artefacts.
+// Pinned simulation seeds — the 98 pairs of v1.0.0, one per edge band (band i uses pair i, as in
+// v1.0.0); the uniformity census also reads pair 0, so pair 0 serves both it and the first band.
+// Generated once via crypto.randomBytes(32/16), pinned for reproducibility; distinct seeds per band
+// avoid cross-target correlation artefacts.
 const SIM_SEEDS: { server: string; client: string }[] = [
   {server:"1249d85943dd2fa3e804098fa2e23fbff48d93c0b6c59c603a029653c15592a3",client:"162ce7214dbb52fef1811744082281d2"},
   {server:"4107109b995299a043c54ef4619d89710fffd47e828da4cc17b4c89e0be77f41",client:"d764059977d5b0737ed24f25cc09e2f9"},

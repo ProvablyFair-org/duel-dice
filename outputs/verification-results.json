@@ -476,10 +476,10 @@
       "step": 12,
       "name": "Dataset Hash & Artifact Value Domains",
       "status": "PASS",
-      "detail": "3550ffca07a6f7825f96cdd4e3d8c3cd57898b5b5238b9739753a754cff056d6; 1275 numeric leaves across the committed artifacts of record all within a src-derived value domain (both directions: every leaf in domain, every leaf covered); 4 artifacts of record (simulation-results.json, rtp-convergence.html, determinism-log.json, chi-squared-results.json) match their SHA-256 pins in src/artifact-pins.ts byte for byte and carry no run metadata",
+      "detail": "3550ffca07a6f7825f96cdd4e3d8c3cd57898b5b5238b9739753a754cff056d6; 1627 numeric leaves across the committed artifacts of record all within a src-derived value domain (both directions: every leaf in domain, every leaf covered); 4 artifacts of record (simulation-results.json, rtp-convergence.html, determinism-log.json, chi-squared-results.json) match their SHA-256 pins in src/artifact-pins.ts byte for byte and carry no run metadata",
       "data": {
         "hashMatch": true,
-        "leavesChecked": 1275,
+        "leavesChecked": 1627,
         "domainProblems": 0,
         "artifactsPinned": 4,
         "pinProblems": 0,
@@ -581,7 +581,7 @@
       "step": 16,
       "name": "Simulation Results — Pass 1 Integrity",
       "status": "PASS",
-      "detail": "scored against the COMMITTED census, not a fresh run; three screens Bonferroni-corrected to α_screen=3.333e-3 (family-wise α=0.01). draw uniformity chi²=99.151 df=99 RE-DERIVED from the 100-bin histogram over 2,000,000 draws → p reported in data (two-sided, in band); serial: runsZ RE-DERIVED from cell counts (runs=998563, n1=1000241) within screen, lag1Z=lag1·√n within zCrit 2.935; edge 10/10 bands within 5·SE of 0.999 at 1,000,000 bets (RTP re-derived from each stored win count), band set identical to the 10 canonical targets; convergence 5 marks structurally intact; mean simulated RTP in this step's data block; false-alarm rate on a fair game (FAIL cap 0.01): uniformity screen 0.0039 (nominal 0.0033; bin 0 holds 101 of the 10,001 lattice values, the others 100, and every expected count is taken as equal: non-central chi-squared, λ=1.98), lag-1 0.0033, runs 0.0033, lag-1 or runs 0.0059 (the two statistics correlate at -0.75 on the same draws; bivariate normal), any of the 10 edge bands beyond 5·SE 3.2e-6 (exact binomial); step ≤ 0.0098",
+      "detail": "scored against the COMMITTED census, not a fresh run; three screens Bonferroni-corrected to α_screen=3.333e-3 (family-wise α=0.01). draw uniformity chi²=99.151 df=99 RE-DERIVED from the 100-bin histogram over 2,000,000 draws → p reported in data (two-sided, in band); serial: runsZ RE-DERIVED from cell counts (runs=998563, n1=1000241) within screen, lag1Z=lag1·√n within zCrit 2.935; edge 98/98 bands within 5·SE of 0.999 at 1,000,000 bets (RTP re-derived from each stored win count), band set identical to the 98 canonical targets; convergence 5 marks structurally intact; mean simulated RTP in this step's data block; false-alarm rate on a fair game (FAIL cap 0.01): uniformity screen 0.0039 (nominal 0.0033; bin 0 holds 101 of the 10,001 lattice values, the others 100, and every expected count is taken as equal: non-central chi-squared, λ=1.98), lag-1 0.0033, runs 0.0033, lag-1 or runs 0.0059 (the two statistics correlate at -0.75 on the same draws; bivariate normal), any of the 98 edge bands beyond 5·SE 3.2e-5 (exact binomial); step ≤ 0.0098",
       "data": {
         "uniformityDraws": 2000000,
         "uniformityChi2": 99.15140000000005,
@@ -589,9 +589,9 @@
         "lag1Z": 2.642522560852665,
         "runsZ": -2.0335575902554037,
         "zCrit": 2.9351994688667054,
-        "edgeBands": 10,
-        "edgeWithin": 10,
-        "meanRtp": 99.76095127742616,
+        "edgeBands": 98,
+        "edgeWithin": 98,
+        "meanRtp": 99.92212862726623,
         "rollMin": 0,
         "rollMax": 10000,
         "falseAlarm": {
@@ -618,10 +618,10 @@
             "method": "each two-sided normal at α_screen; the union at the lattice correlation of the two statistics, bivariate normal"
           },
           "edgeBands": {
-            "anyBeyond": 0.00000319,
-            "method": "exact binomial mass outside each band's passing win counts, 10 independent bands"
+            "anyBeyond": 0.00003166,
+            "method": "exact binomial mass outside each band's passing win counts, 98 independent bands"
           },
-          "stepAtMost": 0.00978
+          "stepAtMost": 0.009809
         }
       },
       "profileIds": [
@@ -631,7 +631,7 @@
         {
           "id": "DICE-20",
           "coverage": "full",
-          "note": "a dedicated 2,000,000-draw uniformity census (chi-squared RE-DERIVED in verify from the 100-bin histogram, two-sided at α_screen; lag-1 and Wald–Wolfowitz runs, the runs z re-derived from the stored cell counts; the three screens Bonferroni-corrected to α/3 so the step's family-wise level is α) plus edge convergence on ten target bands spanning both ends of 2..9998 at 1,000,000 bets each, every band's RTP re-derived from its stored win count and required within 5·SE of the flat 0.999. The census (histogram, win counts) is a deterministic function of the pinned seeds — byte-reproducible; the derived statistics reproduce within the reproduction tolerance. The one raw statistic is lag-1 (the autocorrelation needs the un-stored 2M-draw sequence), disclosed as DL-7; its z is re-derived as lag1·√n and bounded by its screen"
+          "note": "a dedicated 2,000,000-draw uniformity census (chi-squared RE-DERIVED in verify from the 100-bin histogram, two-sided at α_screen; lag-1 and Wald–Wolfowitz runs, the runs z re-derived from the stored cell counts; the three screens Bonferroni-corrected to α/3 so the step's family-wise level is α) plus edge convergence on 98 target bands, roll over 2.00 to 99.00, at 1,000,000 bets each, every band's RTP re-derived from its stored win count and required within 5·SE of the flat 0.999. The census (histogram, win counts) is a deterministic function of the pinned seeds — byte-reproducible; the derived statistics reproduce within the reproduction tolerance. The one raw statistic is lag-1 (the autocorrelation needs the un-stored 2M-draw sequence), disclosed as DL-7; its z is re-derived as lag1·√n and bounded by its screen"
         }
       ]
     },

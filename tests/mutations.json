@@ -339,7 +339,7 @@
     "expect": "[FAIL] Step 12",
     "guard": "Step 12 validates every numeric leaf of the committed artifacts of record against a value domain derived from src/ (never from the artifact). The SHA-256 pin cannot catch a doctored scalar that is re-pinned in the same commit; the domain check can. A mean RTP of -5% is physically impossible (a payout average cannot be negative). Step 16 also re-derives meanRtp from the win counts (defence in depth), but the [FAIL] Step 12 marker confirms the value-domain guard fired.",
     "file": "outputs/simulation-results.json",
-    "find": "\"meanRtp\": 99.76095127742616",
+    "find": "\"meanRtp\": 99.92212862726623",
     "replace": "\"meanRtp\": -5"
   },
   {

@@ -11,7 +11,7 @@
  *
  *   Step 16 (DICE-20) — Pass 1: draw uniformity on ≥2,000,000 draws (chi-squared re-derived from the
  *   100-bin histogram) plus lag-1 and Wald–Wolfowitz runs, the three screens Bonferroni-corrected to
- *   α/3 so the step's family-wise level is α; and edge convergence on ten target bands spanning both
+ *   α/3 so the step's family-wise level is α; and edge convergence on 98 target bands spanning both
  *   ends at 1,000,000 bets each, every band's RTP re-derived from its stored win count.
  *
  *   Step 17 (DICE-21) — Pass 2: every revealed seed × 10,000 nonces, early window = nonces 0–49
@@ -116,7 +116,7 @@ export function run(ctx: VerifyContext): StepResult[] {
     && Math.abs(lag1Z) < zCrit
     && runsZOk && runsRe!.pValue >= ALPHA_SCREEN;
 
-  // (c) edge bands — the ten rows must BE the ten canonical targets, distinct; each band's RTP is
+  // (c) edge bands — the 98 rows must BE the 98 canonical targets, distinct; each band's RTP is
   // re-derived from its win count and required within 5·SE of the flat 0.999.
   const edge: Array<{ target: number; n: number; wins: number }> = Array.isArray(p1.edge) ? p1.edge : [];
   const gotTargets = edge.map(r => r.target);
@@ -203,7 +203,7 @@ export function run(ctx: VerifyContext): StepResult[] {
           correlation: rate4(faSerial.correlation),
           method: 'each two-sided normal at α_screen; the union at the lattice correlation of the two statistics, bivariate normal',
         },
-        edgeBands: { anyBeyond: rate4(faEdge), method: 'exact binomial mass outside each band\'s passing win counts, 10 independent bands' },
+        edgeBands: { anyBeyond: rate4(faEdge), method: `exact binomial mass outside each band's passing win counts, ${SIM_EDGE_TARGETS.length} independent bands` },
         stepAtMost: rate4(faStep16),
       },
     },

@@ -6,9 +6,9 @@
   "pass1": {
     "alpha": 0.01,
     "alphaScreen": 0.0033333333333333335,
-    "bands": 10,
+    "bands": 98,
     "betsPerBand": 1000000,
-    "meanRtp": 99.76095127742616,
+    "meanRtp": 99.92212862726623,
     "uniformity": {
       "draws": 2000000,
       "bins": 100,
@@ -132,91 +132,619 @@
     },
     "edge": [
       {
+        "target": 200,
+        "theoreticalWinChance": 0.9799020097990201,
+        "n": 1000000,
+        "wins": 979853
+      },
+      {
+        "target": 300,
+        "theoreticalWinChance": 0.9699030096990301,
+        "n": 1000000,
+        "wins": 969954
+      },
+      {
+        "target": 400,
+        "theoreticalWinChance": 0.9599040095990401,
+        "n": 1000000,
+        "wins": 959961
+      },
+      {
         "target": 500,
         "theoreticalWinChance": 0.9499050094990501,
         "n": 1000000,
-        "wins": 949989
+        "wins": 950076
+      },
+      {
+        "target": 600,
+        "theoreticalWinChance": 0.9399060093990601,
+        "n": 1000000,
+        "wins": 940089
+      },
+      {
+        "target": 700,
+        "theoreticalWinChance": 0.9299070092990701,
+        "n": 1000000,
+        "wins": 929911
+      },
+      {
+        "target": 800,
+        "theoreticalWinChance": 0.9199080091990801,
+        "n": 1000000,
+        "wins": 919724
+      },
+      {
+        "target": 900,
+        "theoreticalWinChance": 0.9099090090990901,
+        "n": 1000000,
+        "wins": 909877
+      },
+      {
+        "target": 1000,
+        "theoreticalWinChance": 0.8999100089991001,
+        "n": 1000000,
+        "wins": 899666
+      },
+      {
+        "target": 1100,
+        "theoreticalWinChance": 0.8899110088991101,
+        "n": 1000000,
+        "wins": 890183
+      },
+      {
+        "target": 1200,
+        "theoreticalWinChance": 0.8799120087991201,
+        "n": 1000000,
+        "wins": 880395
+      },
+      {
+        "target": 1300,
+        "theoreticalWinChance": 0.8699130086991301,
+        "n": 1000000,
+        "wins": 870044
+      },
+      {
+        "target": 1400,
+        "theoreticalWinChance": 0.8599140085991401,
+        "n": 1000000,
+        "wins": 859312
       },
       {
         "target": 1500,
         "theoreticalWinChance": 0.8499150084991501,
         "n": 1000000,
-        "wins": 850305
+        "wins": 850336
+      },
+      {
+        "target": 1600,
+        "theoreticalWinChance": 0.83991600839916,
+        "n": 1000000,
+        "wins": 840309
+      },
+      {
+        "target": 1700,
+        "theoreticalWinChance": 0.82991700829917,
+        "n": 1000000,
+        "wins": 830491
+      },
+      {
+        "target": 1800,
+        "theoreticalWinChance": 0.81991800819918,
+        "n": 1000000,
+        "wins": 819973
+      },
+      {
+        "target": 1900,
+        "theoreticalWinChance": 0.80991900809919,
+        "n": 1000000,
+        "wins": 809785
+      },
+      {
+        "target": 2000,
+        "theoreticalWinChance": 0.7999200079992,
+        "n": 1000000,
+        "wins": 799497
+      },
+      {
+        "target": 2100,
+        "theoreticalWinChance": 0.78992100789921,
+        "n": 1000000,
+        "wins": 790880
+      },
+      {
+        "target": 2200,
+        "theoreticalWinChance": 0.77992200779922,
+        "n": 1000000,
+        "wins": 779073
+      },
+      {
+        "target": 2300,
+        "theoreticalWinChance": 0.76992300769923,
+        "n": 1000000,
+        "wins": 769734
+      },
+      {
+        "target": 2400,
+        "theoreticalWinChance": 0.7599240075992401,
+        "n": 1000000,
+        "wins": 760060
       },
       {
         "target": 2500,
         "theoreticalWinChance": 0.7499250074992501,
         "n": 1000000,
-        "wins": 749773
+        "wins": 749570
+      },
+      {
+        "target": 2600,
+        "theoreticalWinChance": 0.7399260073992601,
+        "n": 1000000,
+        "wins": 739536
+      },
+      {
+        "target": 2700,
+        "theoreticalWinChance": 0.7299270072992701,
+        "n": 1000000,
+        "wins": 729793
+      },
+      {
+        "target": 2800,
+        "theoreticalWinChance": 0.7199280071992801,
+        "n": 1000000,
+        "wins": 720371
+      },
+      {
+        "target": 2900,
+        "theoreticalWinChance": 0.7099290070992901,
+        "n": 1000000,
+        "wins": 709149
+      },
+      {
+        "target": 3000,
+        "theoreticalWinChance": 0.6999300069993001,
+        "n": 1000000,
+        "wins": 700766
+      },
+      {
+        "target": 3100,
+        "theoreticalWinChance": 0.6899310068993101,
+        "n": 1000000,
+        "wins": 690900
+      },
+      {
+        "target": 3200,
+        "theoreticalWinChance": 0.6799320067993201,
+        "n": 1000000,
+        "wins": 679413
+      },
+      {
+        "target": 3300,
+        "theoreticalWinChance": 0.6699330066993301,
+        "n": 1000000,
+        "wins": 669362
+      },
+      {
+        "target": 3400,
+        "theoreticalWinChance": 0.6599340065993401,
+        "n": 1000000,
+        "wins": 659981
       },
       {
         "target": 3500,
         "theoreticalWinChance": 0.6499350064993501,
         "n": 1000000,
-        "wins": 649981
+        "wins": 649924
+      },
+      {
+        "target": 3600,
+        "theoreticalWinChance": 0.6399360063993601,
+        "n": 1000000,
+        "wins": 638728
+      },
+      {
+        "target": 3700,
+        "theoreticalWinChance": 0.6299370062993701,
+        "n": 1000000,
+        "wins": 630157
+      },
+      {
+        "target": 3800,
+        "theoreticalWinChance": 0.6199380061993801,
+        "n": 1000000,
+        "wins": 620058
+      },
+      {
+        "target": 3900,
+        "theoreticalWinChance": 0.6099390060993901,
+        "n": 1000000,
+        "wins": 609965
+      },
+      {
+        "target": 4000,
+        "theoreticalWinChance": 0.5999400059994,
+        "n": 1000000,
+        "wins": 599500
+      },
+      {
+        "target": 4100,
+        "theoreticalWinChance": 0.58994100589941,
+        "n": 1000000,
+        "wins": 590163
+      },
+      {
+        "target": 4200,
+        "theoreticalWinChance": 0.57994200579942,
+        "n": 1000000,
+        "wins": 579504
+      },
+      {
+        "target": 4300,
+        "theoreticalWinChance": 0.56994300569943,
+        "n": 1000000,
+        "wins": 569159
+      },
+      {
+        "target": 4400,
+        "theoreticalWinChance": 0.55994400559944,
+        "n": 1000000,
+        "wins": 559737
       },
       {
         "target": 4500,
         "theoreticalWinChance": 0.54994500549945,
         "n": 1000000,
-        "wins": 549808
+        "wins": 550518
+      },
+      {
+        "target": 4600,
+        "theoreticalWinChance": 0.53994600539946,
+        "n": 1000000,
+        "wins": 540407
+      },
+      {
+        "target": 4700,
+        "theoreticalWinChance": 0.52994700529947,
+        "n": 1000000,
+        "wins": 529616
+      },
+      {
+        "target": 4800,
+        "theoreticalWinChance": 0.51994800519948,
+        "n": 1000000,
+        "wins": 520713
+      },
+      {
+        "target": 4900,
+        "theoreticalWinChance": 0.50994900509949,
+        "n": 1000000,
+        "wins": 510655
+      },
+      {
+        "target": 5000,
+        "theoreticalWinChance": 0.49995000499950004,
+        "n": 1000000,
+        "wins": 499703
+      },
+      {
+        "target": 5100,
+        "theoreticalWinChance": 0.48995100489951005,
+        "n": 1000000,
+        "wins": 490001
+      },
+      {
+        "target": 5200,
+        "theoreticalWinChance": 0.47995200479952005,
+        "n": 1000000,
+        "wins": 479866
+      },
+      {
+        "target": 5300,
+        "theoreticalWinChance": 0.46995300469953005,
+        "n": 1000000,
+        "wins": 470551
+      },
+      {
+        "target": 5400,
+        "theoreticalWinChance": 0.45995400459954006,
+        "n": 1000000,
+        "wins": 459843
       },
       {
         "target": 5500,
         "theoreticalWinChance": 0.44995500449955006,
         "n": 1000000,
-        "wins": 449501
+        "wins": 450643
+      },
+      {
+        "target": 5600,
+        "theoreticalWinChance": 0.43995600439956006,
+        "n": 1000000,
+        "wins": 439463
+      },
+      {
+        "target": 5700,
+        "theoreticalWinChance": 0.42995700429957007,
+        "n": 1000000,
+        "wins": 429610
+      },
+      {
+        "target": 5800,
+        "theoreticalWinChance": 0.41995800419958,
+        "n": 1000000,
+        "wins": 419670
+      },
+      {
+        "target": 5900,
+        "theoreticalWinChance": 0.40995900409959,
+        "n": 1000000,
+        "wins": 410003
+      },
+      {
+        "target": 6000,
+        "theoreticalWinChance": 0.3999600039996,
+        "n": 1000000,
+        "wins": 400246
+      },
+      {
+        "target": 6100,
+        "theoreticalWinChance": 0.38996100389961,
+        "n": 1000000,
+        "wins": 389887
+      },
+      {
+        "target": 6200,
+        "theoreticalWinChance": 0.37996200379962003,
+        "n": 1000000,
+        "wins": 380042
+      },
+      {
+        "target": 6300,
+        "theoreticalWinChance": 0.36996300369963003,
+        "n": 1000000,
+        "wins": 370514
+      },
+      {
+        "target": 6400,
+        "theoreticalWinChance": 0.35996400359964004,
+        "n": 1000000,
+        "wins": 359822
       },
       {
         "target": 6500,
         "theoreticalWinChance": 0.34996500349965004,
         "n": 1000000,
-        "wins": 350133
+        "wins": 349845
+      },
+      {
+        "target": 6600,
+        "theoreticalWinChance": 0.33996600339966004,
+        "n": 1000000,
+        "wins": 339636
+      },
+      {
+        "target": 6700,
+        "theoreticalWinChance": 0.32996700329967005,
+        "n": 1000000,
+        "wins": 330721
+      },
+      {
+        "target": 6800,
+        "theoreticalWinChance": 0.31996800319968005,
+        "n": 1000000,
+        "wins": 320255
+      },
+      {
+        "target": 6900,
+        "theoreticalWinChance": 0.30996900309969005,
+        "n": 1000000,
+        "wins": 309978
+      },
+      {
+        "target": 7000,
+        "theoreticalWinChance": 0.2999700029997,
+        "n": 1000000,
+        "wins": 299797
+      },
+      {
+        "target": 7100,
+        "theoreticalWinChance": 0.28997100289971,
+        "n": 1000000,
+        "wins": 289782
+      },
+      {
+        "target": 7200,
+        "theoreticalWinChance": 0.27997200279972,
+        "n": 1000000,
+        "wins": 280486
+      },
+      {
+        "target": 7300,
+        "theoreticalWinChance": 0.26997300269973,
+        "n": 1000000,
+        "wins": 270254
+      },
+      {
+        "target": 7400,
+        "theoreticalWinChance": 0.25997400259974,
+        "n": 1000000,
+        "wins": 260778
       },
       {
         "target": 7500,
         "theoreticalWinChance": 0.24997500249975002,
         "n": 1000000,
-        "wins": 249378
+        "wins": 250326
+      },
+      {
+        "target": 7600,
+        "theoreticalWinChance": 0.23997600239976002,
+        "n": 1000000,
+        "wins": 239933
+      },
+      {
+        "target": 7700,
+        "theoreticalWinChance": 0.22997700229977003,
+        "n": 1000000,
+        "wins": 229927
+      },
+      {
+        "target": 7800,
+        "theoreticalWinChance": 0.21997800219978003,
+        "n": 1000000,
+        "wins": 220405
+      },
+      {
+        "target": 7900,
+        "theoreticalWinChance": 0.20997900209979,
+        "n": 1000000,
+        "wins": 210339
+      },
+      {
+        "target": 8000,
+        "theoreticalWinChance": 0.1999800019998,
+        "n": 1000000,
+        "wins": 199811
+      },
+      {
+        "target": 8100,
+        "theoreticalWinChance": 0.18998100189981001,
+        "n": 1000000,
+        "wins": 190307
+      },
+      {
+        "target": 8200,
+        "theoreticalWinChance": 0.17998200179982002,
+        "n": 1000000,
+        "wins": 180318
+      },
+      {
+        "target": 8300,
+        "theoreticalWinChance": 0.16998300169983002,
+        "n": 1000000,
+        "wins": 169478
+      },
+      {
+        "target": 8400,
+        "theoreticalWinChance": 0.15998400159984003,
+        "n": 1000000,
+        "wins": 160196
       },
       {
         "target": 8500,
         "theoreticalWinChance": 0.14998500149985,
         "n": 1000000,
-        "wins": 149621
+        "wins": 149767
+      },
+      {
+        "target": 8600,
+        "theoreticalWinChance": 0.13998600139986,
+        "n": 1000000,
+        "wins": 140752
+      },
+      {
+        "target": 8700,
+        "theoreticalWinChance": 0.12998700129987,
+        "n": 1000000,
+        "wins": 130090
+      },
+      {
+        "target": 8800,
+        "theoreticalWinChance": 0.11998800119988001,
+        "n": 1000000,
+        "wins": 120269
+      },
+      {
+        "target": 8900,
+        "theoreticalWinChance": 0.10998900109989002,
+        "n": 1000000,
+        "wins": 109941
+      },
+      {
+        "target": 9000,
+        "theoreticalWinChance": 0.0999900009999,
+        "n": 1000000,
+        "wins": 99766
+      },
+      {
+        "target": 9100,
+        "theoreticalWinChance": 0.08999100089991001,
+        "n": 1000000,
+        "wins": 90006
+      },
+      {
+        "target": 9200,
+        "theoreticalWinChance": 0.07999200079992001,
+        "n": 1000000,
+        "wins": 80162
+      },
+      {
+        "target": 9300,
+        "theoreticalWinChance": 0.06999300069993,
+        "n": 1000000,
+        "wins": 70154
+      },
+      {
+        "target": 9400,
+        "theoreticalWinChance": 0.059994000599940006,
+        "n": 1000000,
+        "wins": 60023
       },
       {
         "target": 9500,
         "theoreticalWinChance": 0.04999500049995,
         "n": 1000000,
-        "wins": 49558
+        "wins": 49586
+      },
+      {
+        "target": 9600,
+        "theoreticalWinChance": 0.039996000399960006,
+        "n": 1000000,
+        "wins": 39990
+      },
+      {
+        "target": 9700,
+        "theoreticalWinChance": 0.029997000299970003,
+        "n": 1000000,
+        "wins": 30086
+      },
+      {
+        "target": 9800,
+        "theoreticalWinChance": 0.019998000199980003,
+        "n": 1000000,
+        "wins": 19921
+      },
+      {
+        "target": 9900,
+        "theoreticalWinChance": 0.009999000099990002,
+        "n": 1000000,
+        "wins": 10069
       }
     ],
     "convergence": [
       {
         "roundCount": 10000,
-        "meanRTP": 100.56068003116293,
-        "stdDev": 0.7773806675922533
+        "meanRTP": 99.935366750283,
+        "stdDev": 0.1587027262609035
       },
       {
         "roundCount": 50000,
-        "meanRTP": 100.37468061399196,
-        "stdDev": 0.4035231739264503
+        "meanRTP": 99.93950138977496,
+        "stdDev": 0.07594317279537566
       },
       {
         "roundCount": 100000,
-        "meanRTP": 99.92028481599462,
-        "stdDev": 0.23215597242488692
+        "meanRTP": 99.96409987824661,
+        "stdDev": 0.06740992042068344
       },
       {
         "roundCount": 500000,
-        "meanRTP": 99.81501806866909,
-        "stdDev": 0.06767040483892817
+        "meanRTP": 99.92182764966122,
+        "stdDev": 0.025559958811519137
       },
       {
         "roundCount": 1000000,
-        "meanRTP": 99.76095127771637,
-        "stdDev": 0.08822834419195745
+        "meanRTP": 99.92212862741998,
+        "stdDev": 0.016881742293258586
       }
     ]
   },

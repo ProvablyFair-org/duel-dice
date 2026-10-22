@@ -10,7 +10,7 @@
  * In this package the statistical rules are all FAIL rules:
  *
  *   Step 6   collision counts under a wrong and an empty client seed (exact binomial tails);
- *   Step 16  the three Pass 1 screens (draw uniformity, lag-1, runs) and the ten edge bands;
+ *   Step 16  the three Pass 1 screens (draw uniformity, lag-1, runs) and the 98 edge bands;
  *   Step 17  the Pass 2 cherry-pick test on the served early-window return.
  *
  * Every rate is computed here from the rule as the step implements it, not from the rule's nominal

@@ -27,13 +27,14 @@ export const SIM_UNIFORMITY_BINS  = 100;          // df = 99
 export const SIM_SERIAL_DRAWS     = SIM_UNIFORMITY_DRAWS; // serial screens run on the same census
 
 // ── Pass 1 — edge convergence on ≥9 target bands spanning both ends ────────────
-// Ten 1,000,000-bet bands, targets 500…9500, spanning the high-win-chance and low-win-chance ends
-// of the valid 2..9998 target space. Each band's WIN COUNT is the census; the verifier re-derives
-// the win rate, the effective RTP and the goodness-of-fit chi-squared from it.
+// 98 targets of 1,000,000 bets each, roll over 2.00 to 99.00 (targets 200, 300 … 9900): the v1.0.0
+// design restored (v1.3.0). They span the high-win-chance and low-win-chance ends of the valid
+// 2..9998 target space. Each target's WIN COUNT is the census; the verifier re-derives the win rate,
+// the effective RTP and the goodness-of-fit chi-squared from it.
 export const SIM_EDGE_BETS  = 1_000_000;          // ≥ 1,000,000 per band (DICE-20 floor)
 export const SIM_EDGE_TARGETS: readonly number[] =
-  Object.freeze([500, 1500, 2500, 3500, 4500, 5500, 6500, 7500, 8500, 9500]);
-export const SIM_EDGE_BANDS = SIM_EDGE_TARGETS.length;   // 10 ≥ 9
+  Object.freeze(Array.from({ length: 98 }, (_, i) => (i + 2) * 100));
+export const SIM_EDGE_BANDS = SIM_EDGE_TARGETS.length;   // 98 ≥ 9
 
 // RTP-convergence marks captured across the edge bands (cross-band mean RTP at each mark).
 export const SIM_CONVERGENCE_MARKS: readonly number[] =
