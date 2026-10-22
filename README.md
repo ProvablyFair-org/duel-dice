@@ -1,6 +1,6 @@
 # Duel Dice — Provably Fair Audit
 
-**Auditor:** [ProvablyFair.org](https://www.provablyfair.org) · **Audit ID:** PF-2026-DL02 · **Release:** `v1.3.0` · **Capture:** 11 April 2026
+**Auditor:** [ProvablyFair.org](https://www.provablyfair.org) · **Audit ID:** PF-2026-DL02 · **Release:** `v1.3.1` · **Capture:** 11 April 2026
 
 **Result: PROVABLY FAIR — Full Pass.** All 6,700 recorded rolls, every one a roll-over bet, reproduce from (serverSeed, clientSeed, nonce) to the exact `0..10000` lattice value, and every payout settles exactly. The verifier reports 20 passing steps of 21, one disclosed capture-origin flag and no hard failures. The flag is Step 4: in four epochs the capture missed one nonce on a retried request; each roll is reconstructed from a revealed seed whose hash matches the commitment the capture recorded before that epoch's bets, but was not witnessed live. It is verdict-neutral.
 

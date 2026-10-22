@@ -224,7 +224,7 @@ function maxima(diffs) {
  *     src/rng.ts, the frozen simulation design below) — NEVER FROM THE ARTIFACT BEING CHECKED. A
  *     bound the artifact supplies is a bound a forger sets.
  *
- * ── G-VALID: reject only the IMPOSSIBLE ──────────────────────────────────────────────────────────
+ * ── reject only the IMPOSSIBLE ───────────────────────────────────────────────────────────────────
  * The mirror defect costs exactly as much: a GENUINE result rejected for being surprising trains a
  * reader to re-run until green. So these domains encode PHYSICAL POSSIBILITY, not plausibility, and
  * nothing here rejects a value for being round, extreme, or equal to its own expectation. Honest
